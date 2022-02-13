@@ -13,6 +13,7 @@ namespace Ink
 			public bool playMode;
             public bool stats;
             public bool jsonOutput;
+            public bool choosatronOutput;
 			public string inputFile;
             public string outputFile;
             public bool countAllVisits;
@@ -35,6 +36,7 @@ namespace Ink
                 "                    just those referenced by TURNS_SINCE and read counts.\n" +
                 "   -p:              Play mode\n"+
                 "   -j:              Output in JSON format (for communication with tools like Inky)\n"+
+                "   -d:              Output in DAM format (for use with Choosatron devices)\n"+
                 "   -s:              Print stats about story including word count in JSON format\n" +
                 "   -v:              Verbose mode - print compilation timings\n"+
                 "   -k:              Keep inklecate running in play mode even after story is complete\n" +
@@ -92,12 +94,19 @@ namespace Ink
                 Environment.Exit (ExitCodeError);
             }
 
+            var inputIsChoosatron = opts.inputFile.EndsWith (".dam", StringComparison.InvariantCultureIgnoreCase);
+            Console.Write("Input: " + inputIsChoosatron);
+            if ( inputIsChoosatron && opts.stats ) {
+                Console.WriteLine ("Cannot show stats for .dam, only for .ink");
+                Environment.Exit (ExitCodeError);
+            }
+
             Parsed.Story parsedStory = null;
             Runtime.Story story = null;
             Compiler compiler = null;
 
             // Loading a normal ink file (as opposed to an already compiled json file)
-            if (!inputIsJson) {
+            if (!inputIsJson && !inputIsChoosatron) {
 
                 compiler = new Compiler (inputString, new Compiler.Options {
                     sourceFilename = opts.inputFile,
@@ -185,7 +194,7 @@ namespace Ink
                 // Always allow ink external fallbacks
                 story.allowExternalFunctionFallbacks = true;
 
-                var player = new CommandLinePlayer (story, false, compiler, opts.keepOpenAfterStoryFinish, opts.jsonOutput);
+                var player = new CommandLinePlayer (story, false, compiler, opts.keepOpenAfterStoryFinish, opts.jsonOutput, opts.choosatronOutput);
 
                 //Capture a CTRL+C key combo so we can restore the console's foreground color back to normal when exiting
                 Console.CancelKeyPress += OnExit;
@@ -209,9 +218,21 @@ namespace Ink
                 }
             }
 
-            // Compile mode
-            else {
+            // Compile mode - Choosatron
+            else if ( opts.choosatronOutput ) {
+                byte[] choosatronBin = story.ToChoosatron ();
 
+                try {
+                    File.WriteAllBytes (opts.outputFile, choosatronBin);
+
+                } catch {
+                    Console.WriteLine ("Could not write to output file '" + opts.outputFile+"'");
+                    Environment.Exit (ExitCodeError);
+                }
+            }
+
+            // Compile mode - JSON
+            else {
                 var jsonStr = story.ToJson ();
 
                 try {
@@ -335,6 +356,9 @@ namespace Ink
                             break;
                         case 'j':
                             opts.jsonOutput = true;
+                            break;
+                        case 'd':
+                            opts.choosatronOutput = true;
                             break;
                         case 'v':
                             opts.verbose = true;
