@@ -81,7 +81,7 @@ namespace Ink
 
         protected object SucceedRule(int expectedRuleId, object result = null)
         {
-            // Get state at point where this rule stared evaluating
+            // Get state at point where this rule started evaluating
             var stateAtSucceedRule = state.Peek(expectedRuleId);
             var stateAtBeginRule = state.PeekPenultimate ();
 

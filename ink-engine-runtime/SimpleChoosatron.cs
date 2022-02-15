@@ -2,7 +2,6 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 
 namespace Ink.Runtime
 {
@@ -12,12 +11,6 @@ namespace Ink.Runtime
     /// </summary>
     public static class SimpleChoosatron
     {
-
-        public const Byte kStartHeaderByte = 0x01;
-        public const Byte kBinVerMajor = 1;
-        public const Byte kBinVerMinor = 0;
-        public const Byte kBinVerRev = 6;
-
         public class Writer
         {
 
@@ -29,44 +22,6 @@ namespace Ink.Runtime
             public Writer(Stream stream)
             {
                 _writer = new System.IO.BinaryWriter(stream, Encoding.UTF8);
-            }
-
-            public void WriteHeader()
-            {
-                // Start byte.
-                _writer.Write(kStartHeaderByte);
-                
-                WriterHeaderBinVersion();
-                WriteHeaderIFID("fake");
-            }
-
-            public void WriterHeaderBinVersion()
-            {
-                // Version of the Choosatron binary.
-                _writer.Write(kBinVerMajor);
-                _writer.Write(kBinVerMinor);
-                _writer.Write(kBinVerRev);
-            }
-
-            public void WriteHeaderIFID(string aSeed)
-            {
-                // 'author + title' as seed to GUID.
-                string seed = "Jerry BelichAnother Day at the MIA";
-                MD5 md5 = MD5.Create();
-                // Use the seed to create a hash.
-                byte[] data = md5.ComputeHash(Encoding.Default.GetBytes(seed));
-                // TODO: This is more complicated because of how it is being done for
-                // the Python Twine stuff. We are create a GUID, then converting the hex
-                // values to string and writing those bytes. Ideally just ToString the
-                // data directly.
-                string hexHash = "";
-                foreach (byte b in data) {
-                    hexHash += String.Format("{0:x2}", b);
-                }
-                Guid ifid = new Guid(hexHash);
-                string ifidStr = ifid.ToString("D").ToUpper();
-                _writer.Write(ifidStr);
-                Console.WriteLine("IFID: " + ifidStr);
             }
 
             public void WriterFlag()
@@ -220,11 +175,23 @@ namespace Ink.Runtime
                 _stateStack.Pop();
             }
 
+            public void Write(byte b) {
+                _writer.Write(b);
+            }
+
+            public void Write(byte[] b) {
+                _writer.Write(b);
+            }
+
             public void Write(int i)
             {
-                StartNewObject(container: false);
                 _writer.Write(i);
             }
+
+            // public void Write(Int32 i)
+            // {
+            //     _writer.Write(i);
+            // }
 
             public void Write(float f)
             {
