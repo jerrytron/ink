@@ -7,15 +7,63 @@ using System.Linq;
 
 namespace Ink.Runtime
 {
+    static class Bits
+    {
+        public static int SetBitTo1(this int value, int position) {
+            // Set a bit at position to 1.
+            return value |= (1 << position);
+        }
+
+        public static int SetBitTo0(this int value, int position) {
+            // Set a bit at position to 0.
+            return value & ~(1 << position);
+        }
+
+        // Position is index from right to left (0 is far right position).
+        public static int SetBit(this int value, int position, bool state) {
+            if (state) {
+                // Set a bit at position to 1.
+                return value |= (1 << position);   
+            }
+            // Set a bit at position to 0.
+            return value & ~(1 << position);
+        }
+
+        public static bool IsBitSetTo1(this int value, int position) {
+            // Return whether bit at position is set to 1.
+            return (value & (1 << position)) != 0;
+        }
+
+        public static bool IsBitSetTo0(this int value, int position) {
+            // If not 1, bit is 0.
+            return !IsBitSetTo1(value, position);
+        }
+        public static string GetBinaryString(byte n) {
+            char[] b = new char[8];
+            int pos = 7;
+            int i = 0;
+        
+            while (i < 8) {
+                if ((n & (1 << i)) != 0)
+                    b[pos] = '1';
+                else
+                    b[pos] = '0';
+                pos--;
+                i++;
+            }
+            return new string(b);
+        }
+    }
+
      public static class Choosatron
      {
         public static void WriteBinary(SimpleChoosatron.Writer aWriter, Container aContainer)
         {
             //Console.WriteLine(aContainer.BuildStringOfHierarchy());
-            WriteHeader(aWriter, aContainer.content[0] as Container);
+            BuildHeader(aWriter, aContainer.content[0] as Container);
         }
 
-        static void WriteHeader(SimpleChoosatron.Writer aWriter, Container aContainer)
+        static void BuildHeader(SimpleChoosatron.Writer aWriter, Container aContainer)
         {
             // byte[] header = new byte[414]; // Size of header in bytes.
             // MemoryStream memStream = new MemoryStream( header );
@@ -35,7 +83,7 @@ namespace Ink.Runtime
                 if (tag) {
                     string[] parts = tag.text.Split( ':' );
                     parts[1] = parts[1].Trim();
-                    Console.WriteLine( parts[0] + "-" + parts[1]);
+                    //Console.WriteLine( parts[0] + "-" + parts[1]);
                     tags.Add( parts[0], parts[1]);
                 } else {
                     Console.WriteLine("Done with Tags");
@@ -80,16 +128,22 @@ namespace Ink.Runtime
             }
             
             // Set story flags - 4 bytes (16 flags)
-            // TODO
+            // TODO: Set flags as tags.
             byte f = 0;
+            f = (byte)Bits.SetBit(f, 4, true);
+            Console.WriteLine(Bits.GetBinaryString(f));
             aWriter.Write(f);
+            f = 0;
+            f = (byte)Bits.SetBit(f, 7, true);
+            Console.WriteLine(Bits.GetBinaryString(f));
             aWriter.Write(f);
+            f = 0;
             aWriter.Write(f);
             aWriter.Write(f);
             //aWriter.Stream.Position += 4;
 
             // Story size - 4 bytes (unknown at this stage) - Location 44 / 0x2C
-            Int32 size = 0;
+            UInt32 size = 0;
             aWriter.Write(size);
             //aWriter.Stream.Position += 4;
 
@@ -105,19 +159,72 @@ namespace Ink.Runtime
             // Reserved byte.
             aWriter.Stream.Position++;
 
-            byte[] bytes;
+            // Use for properly sized byte buffers.
+            byte[] data;
+            byte[] buffer;
 
             // Lanuage Code - 4 bytes
-            byte[] langCode = ASCIIEncoding.ASCII.GetBytes( tags[kLanguageCode] );
-            bytes = new byte[4];
-            Buffer.BlockCopy(langCode, 0, bytes, 0, langCode.Length);
-            aWriter.Write( bytes );
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kLanguageCode] );
+            buffer = new byte[4];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
 
             // Title - 64 bytes
-            byte[] title = ASCIIEncoding.ASCII.GetBytes( tags[kTitle] );
-            bytes = new byte[64];
-            Buffer.BlockCopy(title, 0, bytes, 0, title.Length);
-            aWriter.Write( bytes );
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kTitle] );
+            buffer = new byte[64];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
+
+            // Subtitle - 32 bytes
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kSubtitle] );
+            buffer = new byte[32];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
+
+            // Author - 48 bytes
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kAuthor] );
+            buffer = new byte[48];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
+
+            // Credits - 80 bytes
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kCredits] );
+            buffer = new byte[80];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
+
+            // Contact - 128 bytes
+            data = ASCIIEncoding.ASCII.GetBytes( tags[kContact] );
+            buffer = new byte[128];
+            Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
+            aWriter.Write( buffer );
+
+            // Publish Date - 4 bytes
+            long published;
+            DateTimeOffset dto;
+            if (tags.ContainsKey( kPublishDate )) {
+                DateTime dt;
+                try {
+                    dt = DateTime.Parse(tags[kPublishDate]);
+                } catch (FormatException) {
+                    throw new System.Exception("Unable to convert 'publish' tag to datetime '" + tags[kPublishDate] + "'.");
+                }
+                dto = new DateTimeOffset(DateTime.Parse(tags[kPublishDate]));
+            } else {
+                dto = new DateTimeOffset(DateTime.Now);
+            }
+            //DateTimeOffset dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
+            published = dto.ToUnixTimeSeconds();
+            aWriter.Write((UInt32)published);
+            Console.WriteLine(published);
+             
+            // Variable Count - 2 bytes - Location 412 / 0x019C
+            UInt16 varCount = 0;
+            aWriter.Write(varCount);
+
+            // Passage Count - 2 bytes - Location 414 / 0x019E
+            UInt16 psgCount = 0;
+            aWriter.Write(psgCount);
         }
 
         static void WriterHeaderBinVersion(SimpleChoosatron.Writer aWriter)
@@ -150,7 +257,7 @@ namespace Ink.Runtime
                 ifid = new Guid(hexHash);
             } catch (System.Exception e) {
                 if (!aIsSeed) {
-                    throw new System.Exception(e.Message + " (Invalid IFID provided. Should be 32 characters of hex.)");
+                    throw new System.Exception(e.Message + " Invalid 'ifid' tag provided.");
                 } else {
                     throw new System.Exception(e.Message);
                 }

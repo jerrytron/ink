@@ -95,7 +95,6 @@ namespace Ink
             }
 
             var inputIsChoosatron = opts.inputFile.EndsWith (".dam", StringComparison.InvariantCultureIgnoreCase);
-            Console.Write("Input: " + inputIsChoosatron);
             if ( inputIsChoosatron && opts.stats ) {
                 Console.WriteLine ("Cannot show stats for .dam, only for .ink");
                 Environment.Exit (ExitCodeError);
@@ -220,7 +219,13 @@ namespace Ink
 
             // Compile mode - Choosatron
             else if ( opts.choosatronOutput ) {
-                byte[] choosatronBin = story.ToChoosatron ();
+                byte[] choosatronBin = {};
+                try {
+                    choosatronBin = story.ToChoosatron();
+                } catch (System.Exception e) {
+                    Console.WriteLine ("Error creating choosatron binary: " + e.Message);
+                    Environment.Exit (ExitCodeError);
+                }
 
                 try {
                     File.WriteAllBytes (opts.outputFile, choosatronBin);

@@ -295,6 +295,22 @@ namespace Ink.Runtime
 
             writer.WriteObjectEnd();
         }
+
+        /// <summary>
+        /// The Story itself in Choosatron Classic representation.
+        /// </summary>
+        public byte[] ToChoosatron()
+        {
+            Console.Write("ToChoosatron\n");
+            var writer = new SimpleChoosatron.Writer();
+            ToChoosatron(writer);
+            return writer.Stream.ToArray();
+        }
+
+        void ToChoosatron(SimpleChoosatron.Writer writer)
+        {
+            Choosatron.WriteBinary(writer, _mainContentContainer);
+        }
             
         /// <summary>
         /// Reset the Story back to its initial state as it was when it was
