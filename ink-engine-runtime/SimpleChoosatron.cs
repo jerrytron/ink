@@ -21,7 +21,7 @@ namespace Ink.Runtime
 
             public Writer(Stream stream)
             {
-                _writer = new System.IO.BinaryWriter(stream, Encoding.UTF8);
+                _writer = new BinaryWriter(stream, Encoding.UTF8);
             }
 
             public void WriterFlag()

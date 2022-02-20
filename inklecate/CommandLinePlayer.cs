@@ -10,13 +10,16 @@ namespace Ink
 		public bool autoPlay { get; set; }
         public bool keepOpenAfterStoryFinish { get; set; }
 
-        public CommandLinePlayer (Story story, bool autoPlay = false, Compiler compiler = null, bool keepOpenAfterStoryFinish = false, bool jsonOutput = false)
+        public CommandLinePlayer (Story story, bool autoPlay = false, Compiler compiler = null, bool keepOpenAfterStoryFinish = false, bool jsonOutput = false, bool choosatronOutput = false)
 		{
 			this.story = story;
             this.story.onError += OnStoryError;
 			this.autoPlay = autoPlay;
             _compiler = compiler;
             _jsonOutput = jsonOutput;
+            _choosatronOutput = choosatronOutput;
+            // Must process as JSON if outputting to Choosatron.
+            //_jsonOutput = _choosatronOutput ? _choosatronOutput : _jsonOutput;
             this.keepOpenAfterStoryFinish = keepOpenAfterStoryFinish;
 		}
 
@@ -55,6 +58,10 @@ namespace Ink
                         }
                     }
 
+                    else if( _choosatronOutput ) {
+                        // TODO CDAM
+                    }
+
                     else {
                         var writer = new Runtime.SimpleJson.Writer();
                         writer.WriteObjectStart();
@@ -91,6 +98,8 @@ namespace Ink
                         if (userInput == null) {
                             if( _jsonOutput ) {
                                 Console.WriteLine ("{\"close\": true}");
+                            } else if ( _choosatronOutput ) {
+                                // TODO CDAM
                             } else {
                                 Console.WriteLine ("<User input stream closed.>");
                             }
@@ -160,6 +169,8 @@ namespace Ink
                     writer.WriteProperty("text", story.currentText);
                     writer.WriteObjectEnd();
                     Console.WriteLine (writer.ToString());
+                } else if ( _choosatronOutput ) {
+                    // TODO CDAM
                 } else {
                     Console.Write (story.currentText);
                 }
@@ -178,6 +189,8 @@ namespace Ink
                         writer.WritePropertyEnd();
                         writer.WriteObjectEnd();
                         Console.WriteLine(writer.ToString());
+                    } else if ( _choosatronOutput ) {
+                        // TODO CDAM
                     } else {
                         Console.WriteLine ("# tags: " + string.Join (", ", tags));
                     }
@@ -207,6 +220,10 @@ namespace Ink
                     Console.WriteLine(issueWriter.ToString());
                 }
 
+                if( _choosatronOutput && (_errors.Count > 0 || _warnings.Count > 0) ) {
+                    // TODO CDAM
+                }
+
                 if (_errors.Count > 0 && !_jsonOutput ) {
                     foreach (var errorMsg in _errors) {
                         Console.WriteLine (errorMsg, ConsoleColor.Red);
@@ -226,6 +243,9 @@ namespace Ink
             if (story.currentChoices.Count == 0 && keepOpenAfterStoryFinish) {
                 if( _jsonOutput ) {
                     Console.WriteLine("{\"end\": true}");
+                } else if ( _choosatronOutput ) {
+                    // TODO CDAM
+                    Console.WriteLine ("--- Choosatron end of story ---");
                 } else {
                     Console.WriteLine ("--- End of story ---");
                 }
@@ -278,6 +298,7 @@ namespace Ink
 
         Compiler _compiler;
         bool _jsonOutput;
+        bool _choosatronOutput;
         List<string> _errors = new List<string>();
         List<string> _warnings = new List<string>();
 	}
