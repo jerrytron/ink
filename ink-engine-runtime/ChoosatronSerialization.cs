@@ -158,7 +158,7 @@ namespace Ink.Runtime
                 foreach (var namedContent in namedOnlyContent) {
                     var name = namedContent.Key;
                     var namedContainer = namedContent.Value as Container;
-                    Console.WriteLine("Name: " + name);
+                    Console.WriteLine("[Named] " + name);
                     ParseRuntimeContainer(namedContainer, aWithoutName:true);
                 }
             }
@@ -195,7 +195,7 @@ namespace Ink.Runtime
                     targetStr = divert.targetPathString;
                 }
 
-                Console.WriteLine("[Divert] " + divTypeKey + " | " + targetStr);
+                Console.WriteLine("\t[Divert] " + divTypeKey + " | " + targetStr);
                 //writer.WriteProperty(divTypeKey, targetStr);
 
                 if (divert.hasVariableTarget) {
@@ -217,8 +217,8 @@ namespace Ink.Runtime
 
             var choicePoint = aObj as ChoicePoint;
             if (choicePoint) {
-                Console.WriteLine("[ChoicePoint] * | " + choicePoint.pathStringOnChoice);
-                Console.WriteLine("\t^ Flags: " + choicePoint.flags);
+                Console.WriteLine("\t[ChoicePoint] * | " + choicePoint.pathStringOnChoice);
+                Console.WriteLine("\t\t^ Flags: " + choicePoint.flags);
                 //writer.WriteProperty("*", choicePoint.pathStringOnChoice);
                 //writer.WriteProperty("flg", choicePoint.flags);
                 return;
@@ -227,10 +227,10 @@ namespace Ink.Runtime
             var strVal = aObj as StringValue;
             if (strVal) {
                 if (strVal.isNewline) {
-                    Console.WriteLine("\t^ Newline");
+                    Console.WriteLine("\t\t^ Newline");
                     //writer.Write("\\n", escape:false);  
                 } else {
-                    Console.WriteLine("[String] " + strVal.value);
+                    Console.WriteLine("\t[String] " + strVal.value);
                     //writer.WriteStringInner("^");
                     //writer.WriteStringInner(strVal.value);
                 }
@@ -240,7 +240,7 @@ namespace Ink.Runtime
             // Used when serialising save state only
             var choice = aObj as Choice;
             if (choice) {
-                Console.WriteLine("[Choice]");
+                Console.WriteLine("\t[Choice]");
                 //WriteChoice(writer, choice);
                 return;
             }
