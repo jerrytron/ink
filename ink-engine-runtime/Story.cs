@@ -309,7 +309,7 @@ namespace Ink.Runtime
 
         void ToChoosatron(SimpleChoosatron.Writer writer)
         {
-            Choosatron.WriteBinary(writer, _mainContentContainer);
+            Choosatron.WriteBinary(writer, _mainContentContainer, this);
         }
             
         /// <summary>
