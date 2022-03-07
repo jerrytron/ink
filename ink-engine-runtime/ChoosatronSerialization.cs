@@ -46,6 +46,13 @@ namespace Ink.Runtime
             _choices.Add(aChoice);
         }
 
+        public ChoosatronChoice GetChoice(int aIndex) {
+            if (aIndex >= 0 && aIndex < _choices.Count) {
+                return _choices[aIndex];
+            }
+            return null;
+        }
+
         public UInt32 GetByteLength() { return _byteLength; }
 
         public byte[] ToBytes() {
@@ -89,6 +96,12 @@ namespace Ink.Runtime
 
             return writer.Stream.ToArray();
         }
+
+        public string ToString() {
+            string output = "";
+
+            return output;
+        }
     }
 
     public class ChoosatronChoice
@@ -130,6 +143,14 @@ namespace Ink.Runtime
             Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
             Console.WriteLine(_isInvisibleDefault ? "f:invisible" : "f:visible");
             Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
+        }
+
+        public string GetChoiceText() {
+            return StartContent + ChoiceOnlyContent;
+        }
+
+        public string GetOutputText() {
+            return StartContent + OutputContent.Trim();
         }
 
         public UInt32 GetByteLength() { return _byteLength; }
@@ -181,6 +202,12 @@ namespace Ink.Runtime
             _byteLength = (UInt32)writer.Stream.Length;
 
             return writer.Stream.ToArray();
+        }
+
+        public string ToString() {
+            string output = "";
+
+            return output;
         }
     }
 
@@ -239,6 +266,12 @@ namespace Ink.Runtime
             _byteLength = (UInt32)writer.Stream.Length;
 
             return writer.Stream.ToArray();
+        }
+
+        public string ToString() {
+            string output = "";
+
+            return output;
         }
     }
 
@@ -319,6 +352,25 @@ namespace Ink.Runtime
                         // Could be a knot/stitch w/ content (like a Choosatron Passage) or
                         // could be a knot diverting to its first stitch. If first element is string, it is a passage.
                         _state = State.NamedContent;
+                        ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                    } else if (_state == State.Passage) {
+                        if (name.StartsWith("c-")) {
+                            _state = State.ChoiceOutputContent;
+                            int choiceIdx = int.Parse(name.Split('-')[1]);
+                            Console.WriteLine(_indent + kIndent + "Choice Idx: " + choiceIdx);
+                            _choice = _psg.GetChoice(choiceIdx);
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            _choice = null;
+                        } else {
+                            _state = State.None;
+                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
+                            _passages.Add(_psg);
+                            _psg = null;
+                        }
+                    } else if (_state == State.ChoiceStartContent) {
+                        if (name == "s") {
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                        }
                     }
                     
                     //_storyState = new StoryState(_story);
@@ -346,7 +398,7 @@ namespace Ink.Runtime
                     //     Console.WriteLine("<*> " + _story.currentText);
                     // }
                     //_indent += kIndent;
-                    ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                    // ParseRuntimeContainer(namedContainer, aWithoutName:true);
                     //_indent = _indent.Remove(_indent.Length - kIndent.Length);
                 }
             }
@@ -420,14 +472,18 @@ namespace Ink.Runtime
                 if (divert.externalArgs > 0) {
                     //writer.WriteProperty("exArgs", divert.externalArgs);
                 }
-
                 // This isn't a passage, but a forward to a passage.
                 if (_state == State.NamedContent) {
                     Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
                     _state = State.None;
                     _psgAliases.Add(aParentPath, divert.targetPath.componentsString);
+                } else if (_state == State.ChoiceLink || _state == State.ChoiceOutputContent) {
+                    if (!targetStr.StartsWith(".^")) {
+                        Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
+                        _state = State.Passage;
+                    } // There is an extra default 
                 } else {
-                    Console.WriteLine(_indent + "[Divert] " + divTypeKey + " " + divert.targetPath.componentsString);
+                    Console.WriteLine(_indent + "[Divert] " + divTypeKey + " " + targetStr);
                 }
 
                 return;
@@ -444,12 +500,22 @@ namespace Ink.Runtime
                     Console.WriteLine("<START CHOICE");
                     _choice = new ChoosatronChoice(choicePoint.pathStringOnChoice);
                     _choice.SetFlags(flags);
+                    if (_choice.HasChoiceOnlyContent) {
+                        if (_choiceOnlyContent != "") {
+                            _choice.ChoiceOnlyContent = _choiceOnlyContent;
+                            _choiceOnlyContent = "";
+                        }
+                    }
                     if (_choice.HasStartContent) {
                         _state = State.ChoiceStartContent;
-                    } else if (_choice.HasChoiceOnlyContent) {
-                        _state = State.ChoiceOnlyContent;
+                        Console.WriteLine("<S:CHOICE START CONTENT");
                     } else {
-                        _state = State.Choice;
+                        Console.WriteLine("<S:CHOICE");
+                        // Add the unfinished choice to the list and back to passage state.
+                        // The next choice might have choice only text.
+                        _psg.AddChoice(_choice);
+                        _choice = null;
+                        _state = State.Passage;
                     }
 
                     //_passages[_psgIdx].AddChoice()
@@ -502,12 +568,12 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "^ Newline");
                     //writer.Write("\\n", escape:false);  
                 } else {
-                    Console.WriteLine(_indent + "[String] " + strVal.value);
+                    // Console.WriteLine(_indent + "[String] " + strVal.value);
                     //writer.WriteStringInner("^");
                     //writer.WriteStringInner(strVal.value);
                     // Is this a passage?
                     if (_state == State.NamedContent) {
-                        Console.WriteLine("<START PASSAGE");
+                        Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
                         _state = State.Passage;
                         _psg = new ChoosatronPassage(aParentPath, strVal.value);
@@ -515,6 +581,25 @@ namespace Ink.Runtime
                         // _psg.body = strVal.value;
                         // _passages.Add(new ChoosatronPassage(aParentPath, strVal.value));
                         // _psgToIdx.Add(aParentPath, _psgIdx);
+                    } else if (_state == State.ChoiceStartContent) {
+                        _choice.StartContent = strVal.value;
+                        Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
+                        Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetChoiceText());
+                        // Add the unfinished choice to the list and back to passage state.
+                        // The next choice might have choice only text.
+                        _psg.AddChoice(_choice);
+                        _choice = null;
+                        _state = State.Passage;
+                    } else if (_state == State.Passage) {
+                        Console.WriteLine(_indent + "[String] Maybe Choice Only Text: " + strVal.value);
+                        _choiceOnlyContent = strVal.value;
+                    } else if (_state == State.ChoiceOutputContent) {
+                        Console.WriteLine(_indent + "[String] Output Text: " + strVal.value);
+                        _choice.OutputContent = strVal.value;
+                        _state = State.ChoiceLink;
+                        Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetOutputText());
+                    } else {
+                        Console.WriteLine(_indent + "[String] UNHANDLED: " + strVal.value + " S:" + _state);
                     }
                 }
                 return;
@@ -627,12 +712,15 @@ namespace Ink.Runtime
                 // Reassignment?
                 if (!varAss.isNewDeclaration) {
                     //writer.WriteProperty("re", true);
-                    Console.Write(_indent + "[VarAss] re " + key + varAss.variableName);
+                    Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
                 } else {
                     string varName = varAss.isGlobal ? aParentPath + varAss.variableName : varAss.variableName;
-                    Console.Write(_indent + "[VarAss] " + key + varName);
-                    _varToIdx.Add(varAss.variableName, _varIdx);
-                    _varIdx++;
+                    Console.WriteLine(_indent + "[VarAss] " + key + varName);
+                    if (key == "VAR=") {
+                        Console.WriteLine(_indent + "[VarAss] " + key + varName);
+                        _varToIdx.Add(varAss.variableName, _varIdx);
+                        _varIdx++;
+                    }
                 }
                 return;
             }
@@ -905,6 +993,7 @@ namespace Ink.Runtime
         static State _state = State.None;
         static ChoosatronPassage _psg;
         static ChoosatronChoice _choice;
+        static string _choiceOnlyContent;
         static UInt16 _psgIdx = 0;
         static UInt16 _varIdx = 0;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
@@ -943,7 +1032,9 @@ namespace Ink.Runtime
             Passage,
             Choice,
             ChoiceStartContent,
-            ChoiceOnlyContent
+            ChoiceOnlyContent,
+            ChoiceOutputContent,
+            ChoiceLink
         };
     }
 
