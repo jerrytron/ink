@@ -31,7 +31,6 @@ namespace Ink.Parsed
 			this.identifier = name;
 
 			if (topLevelObjects == null) {
-                Console.Write("New top level!");
 				topLevelObjects = new List<Parsed.Object> ();
 			}
 
@@ -55,18 +54,15 @@ namespace Ink.Parsed
             _subFlowsByName = new Dictionary<string, FlowBase> ();
 
             foreach (var obj in contentObjs) {
-                // Console.Write("\nContent: " + obj + "\n");
 
                 var subFlow = obj as FlowBase;
                 if (subFlow) {
-                    Console.Write("Subflow: " + subFlow + "\n");
                     if (_firstChildFlow == null)
                         _firstChildFlow = subFlow;
 
                     subFlowObjs.Add (obj);
                     _subFlowsByName [subFlow.identifier?.name] = subFlow;
                 } else {
-                    Console.Write("Weave " + obj + "\n");
                     weaveObjs.Add (obj);
                 }
             }
@@ -93,7 +89,6 @@ namespace Ink.Parsed
 
         protected virtual void PreProcessTopLevelObjects(List<Parsed.Object> topLevelObjects)
         {
-            Console.Write("PreProcessTopLevelObjects\n");
             // empty by default, used by Story to process included file references
         }
 

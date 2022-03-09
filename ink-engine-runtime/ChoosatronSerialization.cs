@@ -13,6 +13,7 @@ namespace Ink.Runtime
         public const int kAppendFlag = 7;
         public const int kContinueFlag = 6;
         byte _attributes;
+        byte _ending;
         UInt32 _byteLength;
         List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
         List<ChoosatronChoice> _choices = new List<ChoosatronChoice>();
@@ -20,6 +21,7 @@ namespace Ink.Runtime
         string _body;
         // public string Name { get; set; }
         // public string Body { get; set; }
+        public bool IsEnding { get; set; }
 
         public ChoosatronPassage(string aName, string aBody) {
             _name = aName;
@@ -27,19 +29,11 @@ namespace Ink.Runtime
         }
 
         public void SetAppendFlag(bool aValue) {
-            if (aValue) {
-                Bits.SetBitTo1(_attributes, kAppendFlag);
-            } else {
-                Bits.SetBitTo0(_attributes, kAppendFlag);
-            }
+            _attributes = Bits.SetBit(_attributes, kAppendFlag, aValue);
         }
 
         public void SetContinueFlag(bool aValue) {
-            if (aValue) {
-                Bits.SetBitTo1(_attributes, kContinueFlag);
-            } else {
-                Bits.SetBitTo0(_attributes, kContinueFlag);
-            }
+            _attributes = Bits.SetBit(_attributes, kContinueFlag, aValue);
         }
 
         public void AddChoice(ChoosatronChoice aChoice) {
@@ -53,9 +47,24 @@ namespace Ink.Runtime
             return null;
         }
 
+        public int GetChoiceCount() { return _choices.Count; }
+
+        public void SetEnding(string aEndTag) {
+            byte.TryParse(aEndTag.Split(':')[1], out _ending);
+            if (_ending < 1 || _ending > 5) {
+                _ending = 0;
+            }
+        }
+
         public UInt32 GetByteLength() { return _byteLength; }
 
+        public void ResolveData() {
+
+        }
+
         public byte[] ToBytes() {
+            ResolveAttributes();
+
             //MemoryStream stream = new MemoryStream();
             SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
 
@@ -83,9 +92,14 @@ namespace Ink.Runtime
             byte choiceCount = (byte)_choices.Count;
             writer.Write(choiceCount);
 
-            // Write choice bytes.
-            foreach (ChoosatronChoice c in _choices) {
-                writer.Write(c.ToBytes());
+            if (choiceCount > 0) {
+                // Write choice bytes.
+                foreach (ChoosatronChoice c in _choices) {
+                    writer.Write(c.ToBytes());
+                }
+            } else {
+                // 1 byte - The ending quality.
+                writer.Write(_ending);
             }
 
             // 1 byte - End of passage byte.
@@ -97,10 +111,43 @@ namespace Ink.Runtime
             return writer.Stream.ToArray();
         }
 
-        public string ToString() {
-            string output = "";
+        public string ToString(string aPrefix = "") {
+            ResolveAttributes();
 
+            string output = "";
+            output += "[Passage: " + _name + "]\n";
+            output += aPrefix + "[Flags] " + Bits.GetBinaryString(_attributes) + "\n";
+            if (_updateOps.Count > 0) {
+                output += aPrefix + "[Updates]\n";
+                foreach (ChoosatronOperation op in _updateOps) {
+                    output += op.ToString(aPrefix);
+                }
+            }
+            output += aPrefix + _body + "\n";
+            if (_choices.Count > 0) {
+                foreach (ChoosatronChoice c in _choices) {
+                    output += c.ToString(aPrefix);
+                }
+            } else {
+                if (_ending != 0) {
+                    output += aPrefix + "[ENDING: " + _ending + "]\n";
+                } else {
+                    output += aPrefix + "[ENDING]\n";
+                }
+            }
+            output += "[Passage Complete]\n\n";
             return output;
+        }
+
+        private void ResolveAttributes() {
+            if (_choices.Count == 1) {
+                string body = _choices[0].Body;
+                if (body.Length == 0 || body.Trim() == "<append>") {
+                    SetAppendFlag(true);
+                } else if (body.Trim() == "<continue>") {
+                    SetContinueFlag(true);
+                }
+            }
         }
     }
 
@@ -109,9 +156,9 @@ namespace Ink.Runtime
         byte _attributes;
         List<ChoosatronOperation> _conditionOps = new List<ChoosatronOperation>();
         List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
-        string _psgLink;
-        string _body;
         UInt32 _byteLength;
+        public string Body { get; set; }
+        public string PsgLink { get; set; }
         public string StartContent { get; set; }    
         public string ChoiceOnlyContent { get; set; }    
         public string OutputContent { get; set; }    
@@ -123,26 +170,35 @@ namespace Ink.Runtime
             get { return _isInvisibleDefault; }
             set {
                 _isInvisibleDefault = value;
-                Bits.SetBitTo1(_attributes, 0);
+                _attributes = Bits.SetBit(_attributes, 0, value);
+                Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
             }
-        } 
-        public bool OnceOnly { get; set; }    
-
-        public ChoosatronChoice(string aPsgLink) {
-            _psgLink = aPsgLink;
         }
+        private bool _onceOnly;
+        public bool OnceOnly {
+            get { return _onceOnly; }
+            set {
+                _onceOnly = value;
+                _attributes = Bits.SetBit(_attributes, 1, value);
+                Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
+            }    
+        }
+
+        public ChoosatronChoice() { Body = ""; }
 
         public void SetFlags(byte aFlags) {
             HasCondition = Bits.IsBitSetTo1(aFlags, 0);
             HasStartContent = Bits.IsBitSetTo1(aFlags, 1);
             HasChoiceOnlyContent = Bits.IsBitSetTo1(aFlags, 2);
-            _isInvisibleDefault = Bits.IsBitSetTo1(aFlags, 3);
+            IsInvisibleDefault = Bits.IsBitSetTo1(aFlags, 3);
             OnceOnly = Bits.IsBitSetTo1(aFlags, 4);
             Console.WriteLine(HasCondition ? "f:condition" : "f:no condition");
             Console.WriteLine(HasStartContent ? "f:start text" : "f:no start text");
             Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
-            Console.WriteLine(_isInvisibleDefault ? "f:invisible" : "f:visible");
+            Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
             Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
+
+            Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
         }
 
         public string GetChoiceText() {
@@ -188,15 +244,15 @@ namespace Ink.Runtime
             }
 
             // 2 bytes - Length of body text.
-            UInt16 bodyLen = (UInt16)_body.Length;
+            UInt16 bodyLen = (UInt16)Body.Length;
             writer.Write(bodyLen);
 
             // The body content.
-            byte[] data = ASCIIEncoding.ASCII.GetBytes( _body );
+            byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
             writer.Write(data);
 
             // 2 bytes - The index of the linked passage.
-            writer.Write(_psgLink);
+            writer.Write(PsgLink);
 
             // Set the total length in bytes for the current state of this choice.
             _byteLength = (UInt32)writer.Stream.Length;
@@ -204,9 +260,27 @@ namespace Ink.Runtime
             return writer.Stream.ToArray();
         }
 
-        public string ToString() {
+        public string ToString(string aPrefix = "") {
             string output = "";
-
+            output += aPrefix + "[Choice]\n";
+            output += aPrefix + aPrefix + "Flags: " + Bits.GetBinaryString(_attributes) + "\n";
+            if (_conditionOps.Count > 0) {
+                output += aPrefix + aPrefix + "[Conditions]\n";
+                foreach (ChoosatronOperation op in _conditionOps) {
+                    output += op.ToString(aPrefix + aPrefix);
+                }
+            }
+            if (Body.Length > 0) {
+                output += aPrefix + aPrefix + Body.Trim() + " -> " + PsgLink + "\n";
+            } else {
+                output += aPrefix + aPrefix + "-> " + PsgLink + "\n";
+            }
+            if (_updateOps.Count > 0) {
+                output += aPrefix + "[Updates]\n";
+                foreach (ChoosatronOperation op in _updateOps) {
+                    output += op.ToString(aPrefix + aPrefix);
+                }
+            }
             return output;
         }
     }
@@ -220,6 +294,35 @@ namespace Ink.Runtime
             Op
         }
 
+        public enum OpType
+        {
+            NotSet = 0,
+            EqualTo, // Returns 0 or 1
+            NotEqualTo, // Returns 0 or 1
+            GreaterThan, // Returns 0 or 1
+            LessThan, // Returns 0 or 1
+            EqualGreater, // Returns 0 or 1
+            EqualLess, // Returns 0 or 1
+            AND, // Returns 0 or 1
+            OR, // Returns 0 or 1
+            XOR, // Returns 0 or 1
+            NAND, // Returns 0 or 1
+            NOR, // Returns 0 or 1
+            XNOR, // Returns 0 or 1
+            ChoiceVisible, // Returns 0 or 1
+            Modulus, // Returns int16_t - remainder of division
+            Set, // Returns int16_t - value of the right operand
+            Plus, // Returns int16_t
+            Minus, // Returns int16_t
+            Multiply, // Returns int16_t
+            Divide, // Returns int16_t - non float, whole number
+            Random, // Returns int16_t - takes min & max (inclusive)
+            DiceRoll, // Returns int16_t - take # of dice & # of sides per die
+            IfStatement, // Returns 0 if false, result of right operand if true
+            // ----
+            TOTAL_OPS
+        }
+
         OperandType _leftType;
         // If left type is operation this will be set.
         ChoosatronOperation _leftOp;
@@ -231,7 +334,7 @@ namespace Ink.Runtime
         Int16 _rightVal;
         UInt32 _byteLength;
 
-        public ChoosatronOperation() {}
+        public ChoosatronOperation() { Operations(); }
 
         public UInt32 GetByteLength() { return _byteLength; }
 
@@ -268,11 +371,66 @@ namespace Ink.Runtime
             return writer.Stream.ToArray();
         }
 
-        public string ToString() {
+        public string ToString(string aPrefix = "") {
             string output = "";
+
+            output += aPrefix + "( ";
+            if (_leftType == OperandType.Raw) {
+                output += _leftVal;
+            } else if (_leftType == OperandType.Var) {
+                output += "[" + _leftVal + "]";
+            } else { // Must be another operation.
+                output += _leftOp.ToString();
+            }
+
+            output += " " + _operationNames[_opType] + " ";
+
+            if (_rightType == OperandType.Raw) {
+                output += _rightVal;
+            } else if (_rightType == OperandType.Var) {
+                output += "[" + _rightVal + "]";
+            } else { // Must be another operation.
+                output += _rightOp.ToString();
+            }
+
+            output += " )\n";
 
             return output;
         }
+
+        static void Operations() {
+            _operationNames = new string[(int)OpType.TOTAL_OPS];
+
+            _operationNames [(int)OpType.EqualTo] = "==";
+            _operationNames [(int)OpType.NotEqualTo] = "!=";
+            _operationNames [(int)OpType.GreaterThan] = ">";
+            _operationNames [(int)OpType.LessThan] = "<";
+            _operationNames [(int)OpType.EqualGreater] = ">=";
+            _operationNames [(int)OpType.EqualLess] = "<=";
+            _operationNames [(int)OpType.AND] = "AND";
+            _operationNames [(int)OpType.OR] = "OR";
+            _operationNames [(int)OpType.XOR] = "XOR";
+            _operationNames [(int)OpType.NAND] = "NAND";
+            _operationNames [(int)OpType.NOR] = "NOR";
+            _operationNames [(int)OpType.XNOR] = "XNOR";
+            _operationNames [(int)OpType.ChoiceVisible] = "ChoiceVisible";
+            _operationNames [(int)OpType.Modulus] = "%";
+            _operationNames [(int)OpType.Set] = "=";
+            _operationNames [(int)OpType.Plus] = "+";
+            _operationNames [(int)OpType.Minus] = "-";
+            _operationNames [(int)OpType.Multiply] = "*";
+            _operationNames [(int)OpType.Divide] = "/";
+            _operationNames [(int)OpType.Random] = "Rand";
+            _operationNames [(int)OpType.DiceRoll] = "DiceRoll";
+
+            for (int i = 0; i < (int)OpType.TOTAL_OPS; ++i) {
+                if (_operationNames [i] == null) {
+                    throw new System.Exception ("Operation not accounted for in serialisation");
+                }
+            }
+        }
+
+        static string[] _operationNames;
     }
 
     public static class Choosatron
@@ -297,22 +455,32 @@ namespace Ink.Runtime
             UInt32 storySize = 0;
             UInt16 varCount = 0;
 
-            // Generate and write the story header - 414 bytes
-            byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, varCount);
-            aWriter.Write( header );
-
-            // Passage Count - 2 bytes - Location 414 / 0x019E
-            aWriter.Write((UInt16)_passages.Count);
-
-            // Passage Offsets - 4 bytes each
-            foreach (UInt32 size in _psgOffsets) {
-                aWriter.Write(size);
-            }
-
-            // Passage Data
             foreach (ChoosatronPassage p in _passages) {
-                aWriter.Write(p.ToBytes());
+                Console.Write(p.ToString("    "));
             }
+
+            if (_passages.Count != 23) {
+                Console.WriteLine("ERROR: Only have " + _passages.Count + " of 23");
+            } else {
+                Console.WriteLine("All 23 passages accounted for!");
+            }
+
+            // // Generate and write the story header - 414 bytes
+            // byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, varCount);
+            // aWriter.Write( header );
+
+            // // Passage Count - 2 bytes - Location 414 / 0x019E
+            // aWriter.Write((UInt16)_passages.Count);
+
+            // // Passage Offsets - 4 bytes each
+            // foreach (UInt32 size in _psgOffsets) {
+            //     aWriter.Write(size);
+            // }
+
+            // // Passage Data
+            // foreach (ChoosatronPassage p in _passages) {
+            //     aWriter.Write(p.ToBytes());
+            // }
         }
 
         static void ParseRuntimeContainer(Container aContainer, bool aWithoutName = false) {
@@ -347,59 +515,38 @@ namespace Ink.Runtime
 
                     // if (_state == State.None && name != "s" && !name.StartsWith("c-") && !name.StartsWith("g-")) {
 
+
                     // If 'None' we are just starting to look for the beginning of a new passage.
                     if (_state == State.None) {
                         // Could be a knot/stitch w/ content (like a Choosatron Passage) or
                         // could be a knot diverting to its first stitch. If first element is string, it is a passage.
+                        Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
                         _state = State.NamedContent;
                         ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                        _state = State.None;
+                        Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
+                        if (_psg.GetChoiceCount() == 0) {
+                            _psg.IsEnding = true;
+                        }
+                        _passages.Add(_psg);
+                        _psg = null;
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceOutputContent;
                             int choiceIdx = int.Parse(name.Split('-')[1]);
-                            Console.WriteLine(_indent + kIndent + "Choice Idx: " + choiceIdx);
+                            Console.WriteLine(_indent + kIndent + "<Choice Idx: " + choiceIdx);
                             _choice = _psg.GetChoice(choiceIdx);
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            Console.WriteLine(_indent + kIndent + "<Choice End Idx: " + choiceIdx);
                             _choice = null;
                         } else {
-                            _state = State.None;
-                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
-                            _passages.Add(_psg);
-                            _psg = null;
+                            
                         }
                     } else if (_state == State.ChoiceStartContent) {
                         if (name == "s") {
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
                     }
-                    
-                    //_storyState = new StoryState(_story);
-                    //_story.ChoosePathString(namedContainer.path.ToString(), true);
-
-                    
-                    // Console.WriteLine("Choices1: " + _story.currentChoices.Count);
-                    // if (_story.canContinue) {
-                    //     string body = _story.Continue();
-                    //     ChoosatronPassage psg = new ChoosatronPassage(body);
-                    //     Console.WriteLine("Choices2: " + _story.currentChoices.Count);
-                    //     //if (_story.currentChoices.Count == 0) {
-                            
-                    //         Console.WriteLine("Can Continue: " + _story.canContinue.ToString());
-                    //         Console.WriteLine("<*> " + body);
-                    //     //}
-                    // }
-
-
-                    // foreach (Choice c in _story.currentChoices) {
-                    //     Console.WriteLine(c.text);
-                    // }
-                    // while (_story.canContinue) {
-                    //     _story.Continue();
-                    //     Console.WriteLine("<*> " + _story.currentText);
-                    // }
-                    //_indent += kIndent;
-                    // ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                    //_indent = _indent.Remove(_indent.Length - kIndent.Length);
                 }
             }
 
@@ -480,6 +627,15 @@ namespace Ink.Runtime
                 } else if (_state == State.ChoiceLink || _state == State.ChoiceOutputContent) {
                     if (!targetStr.StartsWith(".^")) {
                         Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
+                        _choice.PsgLink = divert.targetPath.componentsString;
+                        if (!_choice.IsInvisibleDefault) {
+                            if (_choice.GetChoiceText() != "") {
+                                _choice.Body = _choice.GetChoiceText();
+                            } else {
+                                _choice.Body = _choice.GetOutputText();
+                            }
+                            Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.Body);
+                        }
                         _state = State.Passage;
                     } // There is an extra default 
                 } else {
@@ -498,7 +654,7 @@ namespace Ink.Runtime
                 // Must be building a passage.
                 if (_state == State.Passage) {
                     Console.WriteLine("<START CHOICE");
-                    _choice = new ChoosatronChoice(choicePoint.pathStringOnChoice);
+                    _choice = new ChoosatronChoice();
                     _choice.SetFlags(flags);
                     if (_choice.HasChoiceOnlyContent) {
                         if (_choiceOnlyContent != "") {
@@ -584,7 +740,7 @@ namespace Ink.Runtime
                     } else if (_state == State.ChoiceStartContent) {
                         _choice.StartContent = strVal.value;
                         Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
-                        Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetChoiceText());
+
                         // Add the unfinished choice to the list and back to passage state.
                         // The next choice might have choice only text.
                         _psg.AddChoice(_choice);
@@ -669,7 +825,8 @@ namespace Ink.Runtime
 
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
-                Console.WriteLine(_indent + "[CtrlCmd] " + _controlCommandNames[(int)controlCmd.commandType]);
+                Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
+                // + _controlCommandNames[(int)controlCmd.commandType]);
                 //writer.Write(_controlCommandNames[(int)controlCmd.commandType]);
                 return;
             }
@@ -737,6 +894,11 @@ namespace Ink.Runtime
             var tag = aObj as Tag;
             if (tag) {
                 Console.WriteLine(_indent + "[Tag] " + tag.text);
+                if (_state == State.Passage) {
+                    if (tag.text.StartsWith("eq")) {
+                        _psg.SetEnding(tag.text);
+                    }
+                }
                 //writer.WriteProperty("#", tag.text);
                 return;
             }
@@ -816,11 +978,11 @@ namespace Ink.Runtime
             // Set story flags - 4 bytes (16 flags)
             // TODO: Set flags as tags.
             byte f = 0;
-            f = (byte)Bits.SetBit(f, 4, true);
+            f = Bits.SetBit(f, 4, true);
             Console.WriteLine("Flag 1: " + Bits.GetBinaryString(f));
             writer.Write(f);
             f = 0;
-            f = (byte)Bits.SetBit(f, 7, true);
+            f = Bits.SetBit(f, 7, true);
             Console.WriteLine("Flag 2: " + Bits.GetBinaryString(f));
             writer.Write(f);
             f = 0;
@@ -951,41 +1113,6 @@ namespace Ink.Runtime
             Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static Choosatron() {
-            _controlCommandNames = new string[(int)ControlCommand.CommandType.TOTAL_VALUES];
-
-            _controlCommandNames [(int)ControlCommand.CommandType.EvalStart] = "ev";
-            _controlCommandNames [(int)ControlCommand.CommandType.EvalOutput] = "out";
-            _controlCommandNames [(int)ControlCommand.CommandType.EvalEnd] = "/ev";
-            _controlCommandNames [(int)ControlCommand.CommandType.Duplicate] = "du";
-            _controlCommandNames [(int)ControlCommand.CommandType.PopEvaluatedValue] = "pop";
-            _controlCommandNames [(int)ControlCommand.CommandType.PopFunction] = "~ret";
-            _controlCommandNames [(int)ControlCommand.CommandType.PopTunnel] = "->->";
-            _controlCommandNames [(int)ControlCommand.CommandType.BeginString] = "str";
-            _controlCommandNames [(int)ControlCommand.CommandType.EndString] = "/str";
-            _controlCommandNames [(int)ControlCommand.CommandType.NoOp] = "nop";
-            _controlCommandNames [(int)ControlCommand.CommandType.ChoiceCount] = "choiceCnt";
-            _controlCommandNames [(int)ControlCommand.CommandType.Turns] = "turn";
-            _controlCommandNames [(int)ControlCommand.CommandType.TurnsSince] = "turns";
-            _controlCommandNames [(int)ControlCommand.CommandType.ReadCount] = "readc";
-            _controlCommandNames [(int)ControlCommand.CommandType.Random] = "rnd";
-            _controlCommandNames [(int)ControlCommand.CommandType.SeedRandom] = "srnd";
-            _controlCommandNames [(int)ControlCommand.CommandType.VisitIndex] = "visit";
-            _controlCommandNames [(int)ControlCommand.CommandType.SequenceShuffleIndex] = "seq";
-            _controlCommandNames [(int)ControlCommand.CommandType.StartThread] = "thread";
-            _controlCommandNames [(int)ControlCommand.CommandType.Done] = "done";
-            _controlCommandNames [(int)ControlCommand.CommandType.End] = "end";
-            _controlCommandNames [(int)ControlCommand.CommandType.ListFromInt] = "listInt";
-            _controlCommandNames [(int)ControlCommand.CommandType.ListRange] = "range";
-            _controlCommandNames [(int)ControlCommand.CommandType.ListRandom] = "lrnd";
-
-            for (int i = 0; i < (int)ControlCommand.CommandType.TOTAL_VALUES; ++i) {
-                  if (_controlCommandNames [i] == null)
-                     throw new System.Exception ("Control command not accounted for in serialisation");
-            }
-        }
-
-        static string[] _controlCommandNames;
         static string _indent = "";
         static Story _story;
         static StoryState _storyState;
@@ -1040,24 +1167,24 @@ namespace Ink.Runtime
 
     static class Bits
     {
-        public static int SetBitTo1(this int value, int position) {
+        public static byte SetBitTo1(this int value, int position) {
             // Set a bit at position to 1.
-            return value |= (1 << position);
+            return (byte)(value |= (1 << position));
         }
 
-        public static int SetBitTo0(this int value, int position) {
+        public static byte SetBitTo0(this int value, int position) {
             // Set a bit at position to 0.
-            return value & ~(1 << position);
+            return (byte)(value & ~(1 << position));
         }
 
         // Position is index from right to left (0 is far right position).
-        public static int SetBit(this int value, int position, bool state) {
+        public static byte SetBit(this int value, int position, bool state) {
             if (state) {
                 // Set a bit at position to 1.
-                return value |= (1 << position);   
+                return (byte)(value |= (1 << position));   
             }
             // Set a bit at position to 0.
-            return value & ~(1 << position);
+            return (byte)(value & ~(1 << position));
         }
 
         public static bool IsBitSetTo1(this int value, int position) {
