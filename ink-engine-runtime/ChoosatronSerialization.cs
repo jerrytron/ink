@@ -42,6 +42,10 @@ namespace Ink.Runtime
             _choices.Add(aChoice);
         }
 
+        public List<ChoosatronChoice> GetChoices() {
+            return _choices;
+        }
+
         public ChoosatronChoice GetChoice(int aIndex) {
             if (aIndex >= 0 && aIndex < _choices.Count) {
                 return _choices[aIndex];
@@ -159,6 +163,7 @@ namespace Ink.Runtime
         List<ChoosatronOperation> _conditionOps = new List<ChoosatronOperation>();
         List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
         UInt32 _byteLength;
+        public UInt16 PsgIdx { get; set; }
         public string Body { get; set; }
         public string PsgLink { get; set; }
         public string StartContent { get; set; }    
@@ -254,7 +259,7 @@ namespace Ink.Runtime
             writer.Write(data);
 
             // 2 bytes - The index of the linked passage.
-            writer.Write(PsgLink);
+            writer.Write(PsgIdx);
 
             // Set the total length in bytes for the current state of this choice.
             _byteLength = (UInt32)writer.Stream.Length;
@@ -273,7 +278,7 @@ namespace Ink.Runtime
                 }
             }
             if (Body.Length > 0) {
-                output += aPrefix + aPrefix + Body.Trim() + " -> " + PsgLink + "\n";
+                output += aPrefix + aPrefix + Body.Trim() + " -> " + PsgLink + ": " + PsgIdx + "\n";
             } else {
                 output += aPrefix + aPrefix + "-> " + PsgLink + "\n";
             }
@@ -452,12 +457,17 @@ namespace Ink.Runtime
             
             ParseRuntimeContainer(aContainer);
 
-            //ResolveReferences(passages, psgOffsets, psgToIdx, varToIdx);
             // TODO: Add to story size and var count.
             UInt32 storySize = 0;
             UInt16 varCount = 0;
 
             Console.WriteLine("------------");
+
+            foreach (var map in _psgAliases) {
+                Console.WriteLine(map.Key + ": " + map.Value);
+            }
+
+            ResolveReferences();
 
             foreach (ChoosatronPassage p in _passages) {
                 Console.Write(p.ToString("    "));
@@ -468,10 +478,7 @@ namespace Ink.Runtime
             } else {
                 Console.WriteLine("All 23 passages accounted for!");
             }
-
-            foreach (var map in _psgAliases) {
-                Console.WriteLine(map.Key + ": " + map.Value);
-            }
+            
 
             // // Generate and write the story header - 414 bytes
             // byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, varCount);
@@ -489,6 +496,19 @@ namespace Ink.Runtime
             // foreach (ChoosatronPassage p in _passages) {
             //     aWriter.Write(p.ToBytes());
             // }
+        }
+
+        static void ResolveReferences() {
+            foreach (ChoosatronPassage p in _passages) {
+                foreach (ChoosatronChoice c in p.GetChoices()) {
+                    if (_psgToIdx.ContainsKey(c.PsgLink)) {
+                        c.PsgIdx = _psgToIdx[c.PsgLink];
+                    } else {
+                        c.PsgIdx = _psgToIdx[_psgAliases[c.PsgLink]];
+                    }
+                    // Console.WriteLine("Idx: " + c.PsgIdx);
+                }
+            }
         }
 
         static void ParseRuntimeContainer(Container aContainer, bool aWithoutName = false) {
@@ -539,6 +559,7 @@ namespace Ink.Runtime
                             if (_psg.GetChoiceCount() == 0) {
                                 _psg.IsEnding = true;
                             }
+                            _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
                             _passages.Add(_psg);
                             _psg = null;
                         }
@@ -1138,8 +1159,8 @@ namespace Ink.Runtime
         static UInt16 _varIdx = 0;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<ChoosatronPassage> _passages = new List<ChoosatronPassage>();
-        static List<UInt32> _psgOffsets = new List<UInt32>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
+        static List<UInt32> _psgOffsets = new List<UInt32>();
         static Dictionary<string, UInt16> _varToIdx = new Dictionary<string, UInt16>();
 
         public const string kIndent = "  ";
