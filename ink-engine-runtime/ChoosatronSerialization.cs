@@ -17,15 +17,17 @@ namespace Ink.Runtime
         UInt32 _byteLength;
         List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
         List<ChoosatronChoice> _choices = new List<ChoosatronChoice>();
-        string _name;
-        string _body;
-        // public string Name { get; set; }
-        // public string Body { get; set; }
+        // string _name;
+        // string _body;
+        public string Name { get; set; }
+        public string Body { get; set; }
         public bool IsEnding { get; set; }
 
+        public ChoosatronPassage() {}
+
         public ChoosatronPassage(string aName, string aBody) {
-            _name = aName;
-            _body = aBody;
+            Name = aName;
+            Body = aBody;
         }
 
         public void SetAppendFlag(bool aValue) {
@@ -81,11 +83,11 @@ namespace Ink.Runtime
             }
 
             // 2 bytes - Lenth of the body text.
-            UInt16 bodyLen = (UInt16)_body.Length;
+            UInt16 bodyLen = (UInt16)Body.Length;
             writer.Write(bodyLen);
 
             // The body content.
-            byte[] data = ASCIIEncoding.ASCII.GetBytes( _body );
+            byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
             writer.Write(data);
 
             // 1 byte - Number of choices.
@@ -115,7 +117,7 @@ namespace Ink.Runtime
             ResolveAttributes();
 
             string output = "";
-            output += "[Passage: " + _name + "]\n";
+            output += "[Passage: " + Name + "]\n";
             output += aPrefix + "[Flags] " + Bits.GetBinaryString(_attributes) + "\n";
             if (_updateOps.Count > 0) {
                 output += aPrefix + "[Updates]\n";
@@ -123,7 +125,7 @@ namespace Ink.Runtime
                     output += op.ToString(aPrefix);
                 }
             }
-            output += aPrefix + _body + "\n";
+            output += aPrefix + Body + "\n";
             if (_choices.Count > 0) {
                 foreach (ChoosatronChoice c in _choices) {
                     output += c.ToString(aPrefix);
@@ -455,6 +457,8 @@ namespace Ink.Runtime
             UInt32 storySize = 0;
             UInt16 varCount = 0;
 
+            Console.WriteLine("------------");
+
             foreach (ChoosatronPassage p in _passages) {
                 Console.Write(p.ToString("    "));
             }
@@ -463,6 +467,10 @@ namespace Ink.Runtime
                 Console.WriteLine("ERROR: Only have " + _passages.Count + " of 23");
             } else {
                 Console.WriteLine("All 23 passages accounted for!");
+            }
+
+            foreach (var map in _psgAliases) {
+                Console.WriteLine(map.Key + ": " + map.Value);
             }
 
             // // Generate and write the story header - 414 bytes
@@ -521,15 +529,19 @@ namespace Ink.Runtime
                         // Could be a knot/stitch w/ content (like a Choosatron Passage) or
                         // could be a knot diverting to its first stitch. If first element is string, it is a passage.
                         Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
+                        _psg = new ChoosatronPassage();
+                        _psg.Name = namedContainer.path.ToString();
                         _state = State.NamedContent;
                         ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         _state = State.None;
-                        Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
-                        if (_psg.GetChoiceCount() == 0) {
-                            _psg.IsEnding = true;
+                        if (_psg != null) {
+                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
+                            if (_psg.GetChoiceCount() == 0) {
+                                _psg.IsEnding = true;
+                            }
+                            _passages.Add(_psg);
+                            _psg = null;
                         }
-                        _passages.Add(_psg);
-                        _psg = null;
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceOutputContent;
@@ -732,7 +744,8 @@ namespace Ink.Runtime
                         Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
                         _state = State.Passage;
-                        _psg = new ChoosatronPassage(aParentPath, strVal.value);
+                        //_psg = new ChoosatronPassage(aParentPath, strVal.value);
+                        _psg.Body = strVal.value;
                         // _psg.name = aParentPath;
                         // _psg.body = strVal.value;
                         // _passages.Add(new ChoosatronPassage(aParentPath, strVal.value));
