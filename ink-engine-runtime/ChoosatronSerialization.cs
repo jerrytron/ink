@@ -725,14 +725,16 @@ namespace Ink.Runtime
             if (strVal) {
                 if (strVal.isNewline) {
                     Console.WriteLine(_indent + "^ Newline");
+                    if (_state == State.NamedContent) {
+                        _psg.Body += "\n";
+                    }
                     //writer.Write("\\n", escape:false);  
                 } else {
                     // Is this a passage?
                     if (_state == State.NamedContent) {
                         Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
-                        _state = State.Passage;
-                        _psg.Body = strVal.value;
+                        _psg.Body += strVal.value;
                     } else if (_state == State.ChoiceStartContent) {
                         _choice.StartContent = strVal.value;
                         Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
@@ -806,6 +808,10 @@ namespace Ink.Runtime
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
                 Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
+                if (_state == State.NamedContent) {
+                    _state = State.Passage;
+                    _psg.Body = _psg.Body.Trim();
+                }
                 // + _controlCommandNames[(int)controlCmd.commandType]);
                 //writer.Write(_controlCommandNames[(int)controlCmd.commandType]);
                 return;
