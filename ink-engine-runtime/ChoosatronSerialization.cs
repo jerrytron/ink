@@ -473,6 +473,11 @@ namespace Ink.Runtime
                 storySize += p.GenerateBytes();
             }
 
+            // Add bytes for passage count and offsets.
+            storySize += 2; // Passage count bytes.
+            storySize += (UInt32)(4 * _passages.Count);
+            storySize += (UInt32)414; // Header size.
+
             // Generate and write the story header - 414 bytes
             byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, _varIdx);
             aWriter.Write( header );
