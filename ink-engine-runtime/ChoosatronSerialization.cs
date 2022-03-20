@@ -548,10 +548,7 @@ namespace Ink.Runtime
                         ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         _state = State.None;
                         if (_psg != null) {
-                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE");
-                            if (_psg.GetChoiceCount() == 0) {
-                                _psg.IsEnding = true;
-                            }
+                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
                             _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
                             _passages.Add(_psg);
                             _psg = null;
@@ -650,6 +647,13 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
                     _state = State.None;
                     _psgAliases.Add(aParentPath, divert.targetPath.componentsString);
+                } else if (_state == State.GluePassage) {
+                    ChoosatronChoice c = new ChoosatronChoice();
+                    c.PsgLink = divert.targetPath.componentsString;
+                    c.IsInvisibleDefault = true;
+                    _psg.SetAppendFlag(true);
+                    _psg.AddChoice(c);
+                    _state = State.Passage;
                 } else if (_state == State.ChoiceLink || _state == State.ChoiceOutputContent) {
                     if (!targetStr.StartsWith(".^")) {
                         Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
@@ -806,6 +810,9 @@ namespace Ink.Runtime
             var glue = aObj as Runtime.Glue;
             if (glue) {
                 Console.WriteLine(_indent + "[Glue] <>");
+                if (_state == State.NamedContent) {
+                    _state = State.GluePassage;
+                }
                 //writer.Write("<>");
                 return;
             }
@@ -816,6 +823,10 @@ namespace Ink.Runtime
                 if (_state == State.NamedContent) {
                     _state = State.Passage;
                     _psg.Body = _psg.Body.Trim();
+                } else if (_state == State.Passage) {
+                    if (controlCmd.commandType == ControlCommand.CommandType.End) {
+                        _psg.IsEnding = true;
+                    }
                 }
                 // + _controlCommandNames[(int)controlCmd.commandType]);
                 //writer.Write(_controlCommandNames[(int)controlCmd.commandType]);
@@ -1145,6 +1156,7 @@ namespace Ink.Runtime
             None,
             NamedContent,
             Passage,
+            GluePassage,
             Choice,
             ChoiceStartContent,
             ChoiceOnlyContent,
