@@ -47,6 +47,10 @@ namespace Ink.Runtime
             _choices.Add(aChoice);
         }
 
+        public void AddUpdate(ChoosatronOperation aUpdate) {
+            _updateOps.Add(aUpdate);
+        }
+
         public List<ChoosatronChoice> GetChoices() {
             return _choices;
         }
@@ -348,6 +352,14 @@ namespace Ink.Runtime
 
         public ChoosatronOperation() { Operations(); }
 
+        public void DeclareVariable(Int16 aVarIdx, Int16 aValue) {
+            _leftType = OperandType.Var;
+            _leftVal = aVarIdx;
+            _opType = (byte)OpType.Set;
+            _rightType = OperandType.Raw;
+            _rightVal = aValue;
+        }
+
         public UInt32 GetByteLength() { return _byteLength; }
 
         public byte[] ToBytes() {
@@ -413,6 +425,7 @@ namespace Ink.Runtime
         static void Operations() {
             _operationNames = new string[(int)OpType.TOTAL_OPS];
 
+            _operationNames [(int)OpType.NotSet] = "n/a";
             _operationNames [(int)OpType.EqualTo] = "==";
             _operationNames [(int)OpType.NotEqualTo] = "!=";
             _operationNames [(int)OpType.GreaterThan] = ">";
@@ -434,10 +447,11 @@ namespace Ink.Runtime
             _operationNames [(int)OpType.Divide] = "/";
             _operationNames [(int)OpType.Random] = "Rand";
             _operationNames [(int)OpType.DiceRoll] = "DiceRoll";
+            _operationNames [(int)OpType.IfStatement] = "If";
 
             for (int i = 0; i < (int)OpType.TOTAL_OPS; ++i) {
                 if (_operationNames [i] == null) {
-                    throw new System.Exception ("Operation not accounted for in serialisation");
+                    throw new System.Exception ("Operation not accounted for in serialization.");
                 }
             }
         }
@@ -469,10 +483,14 @@ namespace Ink.Runtime
             if (_varToIdx.Count >= 1) {
                 Console.WriteLine("Variable Declarations");
             }
+            Console.WriteLine("Var Count: " + _vars.Count);
             foreach (var map in _varToIdx) {
                 Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
+                ChoosatronOperation op = new ChoosatronOperation();
+                op.DeclareVariable((Int16)map.Value, _vars[map.Value]);
+                _passages[0].AddUpdate(op);
             }
-            
+
             // Update choice links to match passage indexes.
             ResolveReferences();
 
@@ -533,7 +551,7 @@ namespace Ink.Runtime
             if ((_newPsgDepth + 1 == _dataDepth) && _state == State.Passage) {
                 _state = State.None;
                 if (_psg != null) {
-                    Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
+                    Console.WriteLine("<END OF PASSAGE: " + _psg.Name);
                     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
                     _passages.Add(_psg);
                     _newPsgDepth = 0;
@@ -784,7 +802,6 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + "[Float] " + floatVal.value);
                 //writer.Write(floatVal.value);
                 throw new System.Exception("Choosatron doesn't support float values at this time.");
-                return;
             }
 
             var strVal = aObj as StringValue;
@@ -1182,7 +1199,6 @@ namespace Ink.Runtime
         static ChoosatronPassage _psg;
         static ChoosatronChoice _choice;
         static string _choiceOnlyContent;
-        static UInt16 _psgIdx = 0;
         static UInt16 _varIdx = 0;
         static int _newPsgDepth = 0;
         static Int16 _tempVarVal = -999;
@@ -1224,9 +1240,11 @@ namespace Ink.Runtime
             Passage,
             GluePassage,
             Choice,
+            ChoiceCondition,
             ChoiceStartContent,
             ChoiceOnlyContent,
             ChoiceOutputContent,
+            ChoiceUpdate,
             ChoiceLink,
             VarDeclarations
         };
