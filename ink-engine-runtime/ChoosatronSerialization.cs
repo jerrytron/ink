@@ -464,6 +464,14 @@ namespace Ink.Runtime
             }
 
             Console.WriteLine("Total Passages: " + _passages.Count);
+
+
+            if (_varToIdx.Count >= 1) {
+                Console.WriteLine("Variable Declarations");
+            }
+            foreach (var map in _varToIdx) {
+                Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
+            }
             
             // Update choice links to match passage indexes.
             ResolveReferences();
@@ -553,26 +561,32 @@ namespace Ink.Runtime
                 foreach (var namedContent in namedOnlyContent) {
                     var name = namedContent.Key;
                     var namedContainer = namedContent.Value as Container;
-                    Console.WriteLine(_indent + "[Named] " + name + ": " + namedContainer.path);
+                    Console.WriteLine(_indent + "[Named] " + name + ": " + namedContainer.path + " <State: " + _state + ">");
 
                     // If 'None' we are just starting to look for the beginning of a new passage.
                     if (_state == State.None) {
-                        // Could be a knot/stitch w/ content (like a Choosatron Passage) or
-                        // could be a knot diverting to its first stitch. If first element is string, it is a passage.
-                        Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
-                        // Depth in data structure where we are starting a new passage.
-                        _newPsgDepth = _dataDepth;
-                        _psg = new ChoosatronPassage();
-                        _psg.Name = namedContainer.path.ToString();
-                        _state = State.NamedContent;
-                        ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                        // _state = State.None;
-                        // if (_psg != null) {
-                        //     Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
-                        //     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
-                        //     _passages.Add(_psg);
-                        //     _psg = null;
-                        // }
+                        if (name == "global decl") {
+                            _state = State.VarDeclarations;
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            _state = State.None;
+                        } else {
+                            // Could be a knot/stitch w/ content (like a Choosatron Passage) or
+                            // could be a knot diverting to its first stitch. If first element is string, it is a passage.
+                            Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
+                            // Depth in data structure where we are starting a new passage.
+                            _newPsgDepth = _dataDepth;
+                            _psg = new ChoosatronPassage();
+                            _psg.Name = namedContainer.path.ToString();
+                            _state = State.NamedContent;
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            // _state = State.None;
+                            // if (_psg != null) {
+                            //     Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
+                            //     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
+                            //     _passages.Add(_psg);
+                            //     _psg = null;
+                            // }
+                        }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceOutputContent;
@@ -749,6 +763,9 @@ namespace Ink.Runtime
             if (boolVal) {
                 Console.WriteLine(_indent + "[Bool] " + boolVal.value);
                 //writer.Write(boolVal.value);
+                if (_state == State.VarDeclarations) {
+                    _tempVarVal = (boolVal.value ? (Int16)1 : (Int16)0);
+                }
                 return;
             }
 
@@ -756,6 +773,9 @@ namespace Ink.Runtime
             if (intVal) {
                 Console.WriteLine(_indent + "[Int] " + intVal.value);
                 //writer.Write(intVal.value);
+                if (_state == State.VarDeclarations) {
+                    _tempVarVal = (Int16)intVal.value;
+                }
                 return;
             }
 
@@ -763,6 +783,7 @@ namespace Ink.Runtime
             if (floatVal) {
                 Console.WriteLine(_indent + "[Float] " + floatVal.value);
                 //writer.Write(floatVal.value);
+                throw new System.Exception("Choosatron doesn't support float values at this time.");
                 return;
             }
 
@@ -903,19 +924,20 @@ namespace Ink.Runtime
             if (varAss) {
                 string key = varAss.isGlobal ? "VAR=" : "temp=";
                 //writer.WriteProperty(key, varAss.variableName);
-                
 
                 // Reassignment?
                 if (!varAss.isNewDeclaration) {
                     //writer.WriteProperty("re", true);
                     Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
                 } else {
-                    string varName = varAss.isGlobal ? aParentPath + varAss.variableName : varAss.variableName;
+                    string varName = varAss.isGlobal ? aParentPath + " " + varAss.variableName : varAss.variableName;
                     Console.WriteLine(_indent + "[VarAss] " + key + varName);
                     if (key == "VAR=") {
                         Console.WriteLine(_indent + "[VarAss] " + key + varName);
                         _varToIdx.Add(varAss.variableName, _varIdx);
                         _varIdx++;
+                        _vars.Add(_tempVarVal);
+                        _tempVarVal = -999;
                     }
                 }
                 return;
@@ -1163,11 +1185,13 @@ namespace Ink.Runtime
         static UInt16 _psgIdx = 0;
         static UInt16 _varIdx = 0;
         static int _newPsgDepth = 0;
+        static Int16 _tempVarVal = -999;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<ChoosatronPassage> _passages = new List<ChoosatronPassage>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
         static List<UInt32> _psgOffsets = new List<UInt32>();
         static Dictionary<string, UInt16> _varToIdx = new Dictionary<string, UInt16>();
+        static List<Int16> _vars = new List<Int16>();
 
         public const string kIndent = "  ";
 
@@ -1203,7 +1227,8 @@ namespace Ink.Runtime
             ChoiceStartContent,
             ChoiceOnlyContent,
             ChoiceOutputContent,
-            ChoiceLink
+            ChoiceLink,
+            VarDeclarations
         };
     }
 
