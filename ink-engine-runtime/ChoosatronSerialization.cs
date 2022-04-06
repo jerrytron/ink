@@ -462,6 +462,8 @@ namespace Ink.Runtime
             foreach (ChoosatronPassage p in _passages) {
                 Console.Write(p.ToString("    "));
             }
+
+            Console.WriteLine("Total Passages: " + _passages.Count);
             
             // Update choice links to match passage indexes.
             ResolveReferences();
@@ -510,9 +512,25 @@ namespace Ink.Runtime
         }
 
         static void ParseRuntimeContainer(Container aContainer, bool aWithoutName = false) {
-            _indent += kIndent;
+            _indent += kIndent;           
+            _dataDepth++;
+
             foreach (var c in aContainer.content) {
                 ParseRuntimeObject(c, aContainer.path.ToString());
+            }
+
+            //Console.WriteLine("PsgDepth: " + _newPsgDepth + ", Depth: " + _dataDepth);
+            
+            // End of passage but the container holder additional passages.
+            if ((_newPsgDepth + 1 == _dataDepth) && _state == State.Passage) {
+                _state = State.None;
+                if (_psg != null) {
+                    Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
+                    _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
+                    _passages.Add(_psg);
+                    _newPsgDepth = 0;
+                    _psg = null;
+                }
             }
 
             // Container is always an array [...]
@@ -542,17 +560,19 @@ namespace Ink.Runtime
                         // Could be a knot/stitch w/ content (like a Choosatron Passage) or
                         // could be a knot diverting to its first stitch. If first element is string, it is a passage.
                         Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
+                        // Depth in data structure where we are starting a new passage.
+                        _newPsgDepth = _dataDepth;
                         _psg = new ChoosatronPassage();
                         _psg.Name = namedContainer.path.ToString();
                         _state = State.NamedContent;
                         ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                        _state = State.None;
-                        if (_psg != null) {
-                            Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
-                            _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
-                            _passages.Add(_psg);
-                            _psg = null;
-                        }
+                        // _state = State.None;
+                        // if (_psg != null) {
+                        //     Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
+                        //     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
+                        //     _passages.Add(_psg);
+                        //     _psg = null;
+                        // }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceOutputContent;
@@ -562,8 +582,6 @@ namespace Ink.Runtime
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                             Console.WriteLine(_indent + kIndent + "<Choice End Idx: " + choiceIdx);
                             _choice = null;
-                        } else {
-                            
                         }
                     } else if (_state == State.ChoiceStartContent) {
                         if (name == "s") {
@@ -591,6 +609,7 @@ namespace Ink.Runtime
                 //writer.WriteNull();
             }
 
+            _dataDepth--;
             _indent = _indent.Remove(_indent.Length - kIndent.Length);
         }
 
@@ -647,7 +666,16 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
                     _state = State.None;
                     _psgAliases.Add(aParentPath, divert.targetPath.componentsString);
-                } else if (_state == State.GluePassage) {
+                    _newPsgDepth = 0;
+                } else if (_state == State.GluePassage || _state == State.PassageContent) {
+                    // If using a 'raw' divert, should have a glue after content.
+                    // Or possibly forget '*' or '+' before divert to make it a choice.
+                    if (_state == State.PassageContent) {
+                        string error = "Either missing glue '<>' at the end of passage '"
+                         + _psg.Name + "' content if using a divert directly after, or missing a choice command just before the divert ('*' or '+').";
+                        // throw new System.Exception(error);
+                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append behavior.");
+                    }
                     ChoosatronChoice c = new ChoosatronChoice();
                     c.PsgLink = divert.targetPath.componentsString;
                     c.IsInvisibleDefault = true;
@@ -682,10 +710,18 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + kIndent + "^ Flags: " + choicePoint.flags.ToString() + " '" + Bits.GetBinaryString(flags) + "'");
 
                 // Must be building a passage.
-                if (_state == State.Passage) {
+                // PassageContent means no text was found yet but should have been.
+                if (_state == State.Passage || _state == State.PassageContent) {
                     Console.WriteLine("<START CHOICE");
                     _choice = new ChoosatronChoice();
                     _choice.SetFlags(flags);
+                    
+                    if (_state == State.PassageContent) {
+                        string error = "Choice in passage '" + _psg.Name + "' is missing any content. Either add content or remove choice command ('*' or '+') and add glue to passage content (add '<>' to end of passage text).";
+                        // throw new System.Exception(error);
+                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior unless there are more choices after.");
+                    }
+                    
                     if (_choice.HasChoiceOnlyContent) {
                         if (_choiceOnlyContent != "") {
                             _choice.ChoiceOnlyContent = _choiceOnlyContent;
@@ -734,7 +770,7 @@ namespace Ink.Runtime
             if (strVal) {
                 if (strVal.isNewline) {
                     Console.WriteLine(_indent + "^ Newline");
-                    if (_state == State.NamedContent) {
+                    if (_state == State.PassageContent) {
                         _psg.Body += "\n";
                     }
                     //writer.Write("\\n", escape:false);  
@@ -744,6 +780,7 @@ namespace Ink.Runtime
                         Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
                         _psg.Body += strVal.value;
+                        _state = State.PassageContent;
                     } else if (_state == State.ChoiceStartContent) {
                         _choice.StartContent = strVal.value;
                         Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
@@ -810,7 +847,7 @@ namespace Ink.Runtime
             var glue = aObj as Runtime.Glue;
             if (glue) {
                 Console.WriteLine(_indent + "[Glue] <>");
-                if (_state == State.NamedContent) {
+                if (_state == State.PassageContent) {
                     _state = State.GluePassage;
                 }
                 //writer.Write("<>");
@@ -820,7 +857,7 @@ namespace Ink.Runtime
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
                 Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
-                if (_state == State.NamedContent) {
+                if (_state == State.PassageContent) {
                     _state = State.Passage;
                     _psg.Body = _psg.Body.Trim();
                 } else if (_state == State.Passage) {
@@ -931,9 +968,11 @@ namespace Ink.Runtime
                 var tag = obj as Tag;
                 if (tag) {
                     string[] parts = tag.text.Split( ':' );
-                    parts[1] = parts[1].Trim();
-                    //Console.WriteLine( parts[0] + "-" + parts[1]);
-                    tags.Add( parts[0], parts[1]);
+                    if (parts.Length == 2) {
+                        parts[1] = parts[1].Trim();
+                        // Console.WriteLine( parts[0] + "-" + parts[1]);
+                        tags.Add( parts[0], parts[1]);
+                    }
                 } else {
                     var divert = obj as Divert;
                     Console.WriteLine("Done with Tags");
@@ -1116,12 +1155,14 @@ namespace Ink.Runtime
         }
 
         static string _indent = "";
+        static int _dataDepth = 0;
         static State _state = State.None;
         static ChoosatronPassage _psg;
         static ChoosatronChoice _choice;
         static string _choiceOnlyContent;
         static UInt16 _psgIdx = 0;
         static UInt16 _varIdx = 0;
+        static int _newPsgDepth = 0;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<ChoosatronPassage> _passages = new List<ChoosatronPassage>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
@@ -1155,6 +1196,7 @@ namespace Ink.Runtime
         enum State {
             None,
             NamedContent,
+            PassageContent,
             Passage,
             GluePassage,
             Choice,
