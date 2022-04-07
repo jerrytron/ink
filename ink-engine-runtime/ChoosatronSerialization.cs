@@ -7,460 +7,497 @@ using System.Linq;
 
 namespace Ink.Runtime
 {
-    public class ChoosatronPassage
-    {
-        public const byte kEndPsgByte = 0x03;
-        public const int kAppendFlag = 7;
-        public const int kContinueFlag = 6;
-        byte _attributes;
-        byte _ending;
-        UInt32 _byteLength;
-        byte[] _bytes;
-        List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
-        List<ChoosatronChoice> _choices = new List<ChoosatronChoice>();
-        // string _name;
-        // string _body;
-        public string Name { get; set; }
-        public string Body { get; set; }
-        public bool IsEnding { get; set; }
-
-        public ChoosatronPassage() {}
-
-        public ChoosatronPassage(string aName, string aBody) {
-            Name = aName;
-            Body = aBody;
-        }
-
-        public UInt32 GetByteLength() { return _byteLength; }
-
-        public byte[] GetBytes() { return _bytes; }
-
-        public void SetAppendFlag(bool aValue) {
-            _attributes = Bits.SetBit(_attributes, kAppendFlag, aValue);
-        }
-
-        public void SetContinueFlag(bool aValue) {
-            _attributes = Bits.SetBit(_attributes, kContinueFlag, aValue);
-        }
-
-        public void AddChoice(ChoosatronChoice aChoice) {
-            _choices.Add(aChoice);
-        }
-
-        public void AddUpdate(ChoosatronOperation aUpdate) {
-            _updateOps.Add(aUpdate);
-        }
-
-        public List<ChoosatronChoice> GetChoices() {
-            return _choices;
-        }
-
-        public ChoosatronChoice GetChoice(int aIndex) {
-            if (aIndex >= 0 && aIndex < _choices.Count) {
-                return _choices[aIndex];
-            }
-            return null;
-        }
-
-        public int GetChoiceCount() { return _choices.Count; }
-
-        public void SetEnding(string aEndTag) {
-            byte.TryParse(aEndTag.Split(':')[1], out _ending);
-            if (_ending < 1 || _ending > 5) {
-                _ending = 0;
-            }
-        }
-
-        public UInt32 GenerateBytes() {
-            ResolveAttributes();
-
-            //MemoryStream stream = new MemoryStream();
-            SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
-
-            // 1 byte - Attribute flags.
-            writer.Write(_attributes);
-
-            // 1 byte - Number of update operations.
-            byte updateCount = (byte)_updateOps.Count;
-            writer.Write(updateCount);
-
-            // Write update operation bytes.
-            foreach (ChoosatronOperation op in _updateOps) {
-                writer.Write(op.ToBytes());
-            }
-
-            // 2 bytes - Lenth of the body text.
-            UInt16 bodyLen = (UInt16)Body.Length;
-            writer.Write(bodyLen);
-
-            // The body content.
-            byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
-            writer.Write(data);
-
-            // 1 byte - Number of choices.
-            byte choiceCount = (byte)_choices.Count;
-            writer.Write(choiceCount);
-
-            if (choiceCount > 0) {
-                // Write choice bytes.
-                foreach (ChoosatronChoice c in _choices) {
-                    writer.Write(c.ToBytes());
-                }
-            } else {
-                // 1 byte - The ending quality.
-                writer.Write(_ending);
-            }
-
-            // 1 byte - End of passage byte.
-            writer.Write(kEndPsgByte);
-
-            // Save the bytes for this passage.
-            _bytes = writer.Stream.ToArray();
-
-            // Set the total length in bytes for the current state of this passage.
-            _byteLength = (UInt32)_bytes.Length;
-
-            return _byteLength;
-            //return writer.Stream.ToArray();
-        }
-
-        public string ToString(string aPrefix = "") {
-            ResolveAttributes();
-
-            string output = "";
-            output += "[Passage: " + Name + "]\n";
-            output += aPrefix + "[Flags] " + Bits.GetBinaryString(_attributes) + "\n";
-            if (_updateOps.Count > 0) {
-                output += aPrefix + "[Updates]\n";
-                foreach (ChoosatronOperation op in _updateOps) {
-                    output += op.ToString(aPrefix);
-                }
-            }
-            output += aPrefix + Body + "\n";
-            if (_choices.Count > 0) {
-                foreach (ChoosatronChoice c in _choices) {
-                    output += c.ToString(aPrefix);
-                }
-            } else {
-                if (_ending != 0) {
-                    output += aPrefix + "[ENDING: " + _ending + "]\n";
-                } else {
-                    output += aPrefix + "[ENDING]\n";
-                }
-            }
-            output += "[Passage Complete]\n\n";
-            return output;
-        }
-
-        private void ResolveAttributes() {
-            if (_choices.Count == 1) {
-                string body = _choices[0].Body;
-                if (body.Length == 0 || body.Trim().ToLower() == "<append>") {
-                    _choices[0].Body = "";
-                    SetAppendFlag(true);
-                } else if (body.Trim().ToLower() == "<continue>") {
-                    _choices[0].Body = "";
-                    SetContinueFlag(true);
-                }
-            }
-        }
-    }
-
-    public class ChoosatronChoice
-    {
-        byte _attributes;
-        List<ChoosatronOperation> _conditionOps = new List<ChoosatronOperation>();
-        List<ChoosatronOperation> _updateOps = new List<ChoosatronOperation>();
-        UInt32 _byteLength;
-        public UInt16 PsgIdx { get; set; }
-        public string Body { get; set; }
-        public string PsgLink { get; set; }
-        public string StartContent { get; set; }    
-        public string ChoiceOnlyContent { get; set; }    
-        public string OutputContent { get; set; }    
-        public bool HasCondition { get; set; }    
-        public bool HasStartContent { get; set; }    
-        public bool HasChoiceOnlyContent { get; set; }    
-        private bool _isInvisibleDefault;
-        public bool IsInvisibleDefault {
-            get { return _isInvisibleDefault; }
-            set {
-                _isInvisibleDefault = value;
-                _attributes = Bits.SetBit(_attributes, 0, value);
-                Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
-            }
-        }
-        private bool _onceOnly;
-        public bool OnceOnly {
-            get { return _onceOnly; }
-            set {
-                _onceOnly = value;
-                _attributes = Bits.SetBit(_attributes, 1, value);
-                Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
-            }    
-        }
-
-        public ChoosatronChoice() { Body = ""; }
-
-        public void SetFlags(byte aFlags) {
-            HasCondition = Bits.IsBitSetTo1(aFlags, 0);
-            HasStartContent = Bits.IsBitSetTo1(aFlags, 1);
-            HasChoiceOnlyContent = Bits.IsBitSetTo1(aFlags, 2);
-            IsInvisibleDefault = Bits.IsBitSetTo1(aFlags, 3);
-            OnceOnly = Bits.IsBitSetTo1(aFlags, 4);
-            Console.WriteLine(HasCondition ? "f:condition" : "f:no condition");
-            Console.WriteLine(HasStartContent ? "f:start text" : "f:no start text");
-            Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
-            Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
-            Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
-
-            Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
-        }
-
-        public string GetChoiceText() {
-            return StartContent + ChoiceOnlyContent;
-        }
-
-        public string GetOutputText() {
-            return StartContent + OutputContent.Trim();
-        }
-
-        public UInt32 GetByteLength() { return _byteLength; }
-
-        public byte[] ToBytes() {
-            //MemoryStream stream = new MemoryStream();
-            SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
-
-            // 1 byte - Attribute flags.
-            writer.Write(_attributes);
-
-            // 1 byte - Number of conditions.
-            byte condCount = (byte)_conditionOps.Count;
-            writer.Write(condCount);
-
-            // Write the data of each condition operation.
-            foreach (ChoosatronOperation condition in _conditionOps) {
-                writer.Write(condition.ToBytes());
-            }
-
-            byte updateCount = (byte)_updateOps.Count;
-            byte[][] updateBytes = new byte[updateCount][];
-            UInt16 totalUpdateBytes = 0;
-            for (int i = 0; i < updateCount; i++) {
-                updateBytes[i] = _updateOps[i].ToBytes();
-                totalUpdateBytes += (UInt16)updateBytes[i].Length;
-            }
-            // 2 bytes - Byte length of all update operation combined.
-            writer.Write(totalUpdateBytes);
-            // 1 byte - Number of updates.
-            writer.Write(updateCount);
-            // All the update operation bytes.
-            foreach (byte[] opBytes in updateBytes) {
-                writer.Write(opBytes);
-            }
-
-            // 2 bytes - Length of body text.
-            UInt16 bodyLen = (UInt16)Body.Length;
-            writer.Write(bodyLen);
-
-            // The body content.
-            byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
-            writer.Write(data);
-
-            // 2 bytes - The index of the linked passage.
-            writer.Write(PsgIdx);
-
-            // Set the total length in bytes for the current state of this choice.
-            _byteLength = (UInt32)writer.Stream.Length;
-
-            return writer.Stream.ToArray();
-        }
-
-        public string ToString(string aPrefix = "") {
-            string output = "";
-            output += aPrefix + "[Choice]\n";
-            output += aPrefix + aPrefix + "Flags: " + Bits.GetBinaryString(_attributes) + "\n";
-            if (_conditionOps.Count > 0) {
-                output += aPrefix + aPrefix + "[Conditions]\n";
-                foreach (ChoosatronOperation op in _conditionOps) {
-                    output += op.ToString(aPrefix + aPrefix);
-                }
-            }
-            if (Body.Length > 0) {
-                output += aPrefix + aPrefix + Body.Trim() + " -> " + PsgLink + ": " + PsgIdx + "\n";
-            } else {
-                output += aPrefix + aPrefix + "-> " + PsgLink + "\n";
-            }
-            if (_updateOps.Count > 0) {
-                output += aPrefix + "[Updates]\n";
-                foreach (ChoosatronOperation op in _updateOps) {
-                    output += op.ToString(aPrefix + aPrefix);
-                }
-            }
-            return output;
-        }
-    }
-
-    public class ChoosatronOperation
-    {
-        // For operations, is an operand a raw value a variable, or another operation.
-        enum OperandType {
-            Raw = 1,
-            Var,
-            Op
-        }
-
-        public enum OpType
-        {
-            NotSet = 0,
-            EqualTo, // Returns 0 or 1
-            NotEqualTo, // Returns 0 or 1
-            GreaterThan, // Returns 0 or 1
-            LessThan, // Returns 0 or 1
-            EqualGreater, // Returns 0 or 1
-            EqualLess, // Returns 0 or 1
-            AND, // Returns 0 or 1
-            OR, // Returns 0 or 1
-            XOR, // Returns 0 or 1
-            NAND, // Returns 0 or 1
-            NOR, // Returns 0 or 1
-            XNOR, // Returns 0 or 1
-            ChoiceVisible, // Returns 0 or 1
-            Modulus, // Returns int16_t - remainder of division
-            Set, // Returns int16_t - value of the right operand
-            Plus, // Returns int16_t
-            Minus, // Returns int16_t
-            Multiply, // Returns int16_t
-            Divide, // Returns int16_t - non float, whole number
-            Random, // Returns int16_t - takes min & max (inclusive)
-            DiceRoll, // Returns int16_t - take # of dice & # of sides per die
-            IfStatement, // Returns 0 if false, result of right operand if true
-            // ----
-            TOTAL_OPS
-        }
-
-        OperandType _leftType;
-        // If left type is operation this will be set.
-        ChoosatronOperation _leftOp;
-        Int16 _leftVal;
-        byte _opType;
-        OperandType _rightType;
-        // If right type is operation this will be set.
-        ChoosatronOperation _rightOp;
-        Int16 _rightVal;
-        UInt32 _byteLength;
-
-        public ChoosatronOperation() { Operations(); }
-
-        public void DeclareVariable(Int16 aVarIdx, Int16 aValue) {
-            _leftType = OperandType.Var;
-            _leftVal = aVarIdx;
-            _opType = (byte)OpType.Set;
-            _rightType = OperandType.Raw;
-            _rightVal = aValue;
-        }
-
-        public UInt32 GetByteLength() { return _byteLength; }
-
-        public byte[] ToBytes() {
-            //MemoryStream stream = new MemoryStream();
-            SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
-
-            // 1 byte for left/right types; only 4 bits each.
-            byte bothTypes = (byte)_leftType;
-            // Shift the left value to the left side of the byte.
-            bothTypes = (byte)(bothTypes << 4);
-            // Add the right side.
-            bothTypes = (byte)(bothTypes & (byte)_rightType);
-            writer.Write(bothTypes);
-
-            // 1 byte for operation type.
-            writer.Write(_opType);
-
-            if (_leftType == OperandType.Op) {
-                writer.Write(_leftOp.ToBytes());
-            } else {
-                writer.Write(_leftVal);
-            }
-
-            if (_rightType == OperandType.Op) {
-                writer.Write(_rightOp.ToBytes());
-            } else {
-                writer.Write(_rightVal);
-            }
-
-            // Set the total length in bytes for the current state of this operation.
-            _byteLength = (UInt32)writer.Stream.Length;
-
-            return writer.Stream.ToArray();
-        }
-
-        public string ToString(string aPrefix = "") {
-            string output = "";
-
-            output += aPrefix + "( ";
-            if (_leftType == OperandType.Raw) {
-                output += _leftVal;
-            } else if (_leftType == OperandType.Var) {
-                output += "[" + _leftVal + "]";
-            } else { // Must be another operation.
-                output += _leftOp.ToString();
-            }
-
-            output += " " + _operationNames[_opType] + " ";
-
-            if (_rightType == OperandType.Raw) {
-                output += _rightVal;
-            } else if (_rightType == OperandType.Var) {
-                output += "[" + _rightVal + "]";
-            } else { // Must be another operation.
-                output += _rightOp.ToString();
-            }
-
-            output += " )\n";
-
-            return output;
-        }
-
-        static void Operations() {
-            _operationNames = new string[(int)OpType.TOTAL_OPS];
-
-            _operationNames [(int)OpType.NotSet] = "n/a";
-            _operationNames [(int)OpType.EqualTo] = "==";
-            _operationNames [(int)OpType.NotEqualTo] = "!=";
-            _operationNames [(int)OpType.GreaterThan] = ">";
-            _operationNames [(int)OpType.LessThan] = "<";
-            _operationNames [(int)OpType.EqualGreater] = ">=";
-            _operationNames [(int)OpType.EqualLess] = "<=";
-            _operationNames [(int)OpType.AND] = "AND";
-            _operationNames [(int)OpType.OR] = "OR";
-            _operationNames [(int)OpType.XOR] = "XOR";
-            _operationNames [(int)OpType.NAND] = "NAND";
-            _operationNames [(int)OpType.NOR] = "NOR";
-            _operationNames [(int)OpType.XNOR] = "XNOR";
-            _operationNames [(int)OpType.ChoiceVisible] = "ChoiceVisible";
-            _operationNames [(int)OpType.Modulus] = "%";
-            _operationNames [(int)OpType.Set] = "=";
-            _operationNames [(int)OpType.Plus] = "+";
-            _operationNames [(int)OpType.Minus] = "-";
-            _operationNames [(int)OpType.Multiply] = "*";
-            _operationNames [(int)OpType.Divide] = "/";
-            _operationNames [(int)OpType.Random] = "Rand";
-            _operationNames [(int)OpType.DiceRoll] = "DiceRoll";
-            _operationNames [(int)OpType.IfStatement] = "If";
-
-            for (int i = 0; i < (int)OpType.TOTAL_OPS; ++i) {
-                if (_operationNames [i] == null) {
-                    throw new System.Exception ("Operation not accounted for in serialization.");
-                }
-            }
-        }
-
-        static string[] _operationNames;
-    }
-
     public static class Choosatron
     {
+        public class Passage
+        {
+            public const byte kEndPsgByte = 0x03;
+            public const int kAppendFlag = 7;
+            public const int kContinueFlag = 6;
+            byte _attributes;
+            byte _ending;
+            UInt32 _byteLength;
+            byte[] _bytes;
+            List<Operation> _updateOps = new List<Operation>();
+            List<Choice> _choices = new List<Choice>();
+            // string _name;
+            // string _body;
+            public string Name { get; set; }
+            public string Body { get; set; }
+            public bool IsEnding { get; set; }
+
+            public Passage() {}
+
+            public Passage(string aName, string aBody) {
+                Name = aName;
+                Body = aBody;
+            }
+
+            public UInt32 GetByteLength() { return _byteLength; }
+
+            public byte[] GetBytes() { return _bytes; }
+
+            public void SetAppendFlag(bool aValue) {
+                _attributes = Bits.SetBit(_attributes, kAppendFlag, aValue);
+            }
+
+            public void SetContinueFlag(bool aValue) {
+                _attributes = Bits.SetBit(_attributes, kContinueFlag, aValue);
+            }
+
+            public void AddChoice(Choice aChoice) {
+                _choices.Add(aChoice);
+            }
+
+            public void AddUpdate(Operation aUpdate) {
+                _updateOps.Add(aUpdate);
+            }
+
+            public List<Choice> GetChoices() {
+                return _choices;
+            }
+
+            public Choice GetChoice(int aIndex) {
+                if (aIndex >= 0 && aIndex < _choices.Count) {
+                    return _choices[aIndex];
+                }
+                return null;
+            }
+
+            public int GetChoiceCount() { return _choices.Count; }
+
+            public void SetEnding(string aEndTag) {
+                byte.TryParse(aEndTag.Split(':')[1], out _ending);
+                if (_ending < 1 || _ending > 5) {
+                    _ending = 0;
+                }
+            }
+
+            public UInt32 GenerateBytes() {
+                ResolveAttributes();
+
+                //MemoryStream stream = new MemoryStream();
+                SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
+
+                // 1 byte - Attribute flags.
+                writer.Write(_attributes);
+
+                // 1 byte - Number of update operations.
+                byte updateCount = (byte)_updateOps.Count;
+                writer.Write(updateCount);
+
+                // Write update operation bytes.
+                foreach (Operation op in _updateOps) {
+                    writer.Write(op.ToBytes());
+                }
+
+                // 2 bytes - Lenth of the body text.
+                UInt16 bodyLen = (UInt16)Body.Length;
+                writer.Write(bodyLen);
+
+                // The body content.
+                byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
+                writer.Write(data);
+
+                // 1 byte - Number of choices.
+                byte choiceCount = (byte)_choices.Count;
+                writer.Write(choiceCount);
+
+                if (choiceCount > 0) {
+                    // Write choice bytes.
+                    foreach (Choice c in _choices) {
+                        writer.Write(c.ToBytes());
+                    }
+                } else {
+                    // 1 byte - The ending quality.
+                    writer.Write(_ending);
+                }
+
+                // 1 byte - End of passage byte.
+                writer.Write(kEndPsgByte);
+
+                // Save the bytes for this passage.
+                _bytes = writer.Stream.ToArray();
+
+                // Set the total length in bytes for the current state of this passage.
+                _byteLength = (UInt32)_bytes.Length;
+
+                return _byteLength;
+                //return writer.Stream.ToArray();
+            }
+
+            public string ToString(string aPrefix = "") {
+                ResolveAttributes();
+
+                string output = "";
+                output += "[Passage: " + Name + "]\n";
+                output += aPrefix + "[Flags] " + Bits.GetBinaryString(_attributes) + "\n";
+                if (_updateOps.Count > 0) {
+                    output += aPrefix + "[Updates]\n";
+                    foreach (Operation op in _updateOps) {
+                        output += op.ToString(aPrefix);
+                    }
+                }
+                output += aPrefix + Body + "\n";
+                if (_choices.Count > 0) {
+                    foreach (Choice c in _choices) {
+                        output += c.ToString(aPrefix);
+                    }
+                } else {
+                    if (_ending != 0) {
+                        output += aPrefix + "[ENDING: " + _ending + "]\n";
+                    } else {
+                        output += aPrefix + "[ENDING]\n";
+                    }
+                }
+                output += "[Passage Complete]\n\n";
+                return output;
+            }
+
+            private void ResolveAttributes() {
+                if (_choices.Count == 1) {
+                    string body = _choices[0].Body;
+                    if (body.Length == 0 || body.Trim().ToLower() == "<append>") {
+                        _choices[0].Body = "";
+                        SetAppendFlag(true);
+                    } else if (body.Trim().ToLower() == "<continue>") {
+                        _choices[0].Body = "";
+                        SetContinueFlag(true);
+                    }
+                }
+            }
+        }
+
+        public class Choice
+        {
+            byte _attributes;
+            List<Operation> _conditionOps = new List<Operation>();
+            List<Operation> _updateOps = new List<Operation>();
+            UInt32 _byteLength;
+            public UInt16 PsgIdx { get; set; }
+            public string Body { get; set; }
+            public string PsgLink { get; set; }
+            public string StartContent { get; set; }    
+            public string ChoiceOnlyContent { get; set; }    
+            public string OutputContent { get; set; }    
+            public bool HasCondition { get; set; }    
+            public bool HasStartContent { get; set; }    
+            public bool HasChoiceOnlyContent { get; set; }    
+            private bool _isInvisibleDefault;
+            public bool IsInvisibleDefault {
+                get { return _isInvisibleDefault; }
+                set {
+                    _isInvisibleDefault = value;
+                    _attributes = Bits.SetBit(_attributes, 0, value);
+                    Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
+                }
+            }
+            private bool _onceOnly;
+            public bool OnceOnly {
+                get { return _onceOnly; }
+                set {
+                    _onceOnly = value;
+                    _attributes = Bits.SetBit(_attributes, 1, value);
+                    Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
+                }    
+            }
+
+            public Choice() { Body = ""; }
+
+            public void SetFlags(byte aFlags) {
+                HasCondition = Bits.IsBitSetTo1(aFlags, 0);
+                HasStartContent = Bits.IsBitSetTo1(aFlags, 1);
+                HasChoiceOnlyContent = Bits.IsBitSetTo1(aFlags, 2);
+                IsInvisibleDefault = Bits.IsBitSetTo1(aFlags, 3);
+                OnceOnly = Bits.IsBitSetTo1(aFlags, 4);
+                Console.WriteLine(HasCondition ? "f:condition" : "f:no condition");
+                Console.WriteLine(HasStartContent ? "f:start text" : "f:no start text");
+                Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
+                Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
+                Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
+
+                Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
+            }
+
+            public string GetChoiceText() {
+                return StartContent + ChoiceOnlyContent;
+            }
+
+            public string GetOutputText() {
+                return StartContent + OutputContent.Trim();
+            }
+
+            public UInt32 GetByteLength() { return _byteLength; }
+
+            public byte[] ToBytes() {
+                //MemoryStream stream = new MemoryStream();
+                SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
+
+                // 1 byte - Attribute flags.
+                writer.Write(_attributes);
+
+                // 1 byte - Number of conditions.
+                byte condCount = (byte)_conditionOps.Count;
+                writer.Write(condCount);
+
+                // Write the data of each condition operation.
+                foreach (Operation condition in _conditionOps) {
+                    writer.Write(condition.ToBytes());
+                }
+
+                byte updateCount = (byte)_updateOps.Count;
+                byte[][] updateBytes = new byte[updateCount][];
+                UInt16 totalUpdateBytes = 0;
+                for (int i = 0; i < updateCount; i++) {
+                    updateBytes[i] = _updateOps[i].ToBytes();
+                    totalUpdateBytes += (UInt16)updateBytes[i].Length;
+                }
+                // 2 bytes - Byte length of all update operation combined.
+                writer.Write(totalUpdateBytes);
+                // 1 byte - Number of updates.
+                writer.Write(updateCount);
+                // All the update operation bytes.
+                foreach (byte[] opBytes in updateBytes) {
+                    writer.Write(opBytes);
+                }
+
+                // 2 bytes - Length of body text.
+                UInt16 bodyLen = (UInt16)Body.Length;
+                writer.Write(bodyLen);
+
+                // The body content.
+                byte[] data = ASCIIEncoding.ASCII.GetBytes( Body );
+                writer.Write(data);
+
+                // 2 bytes - The index of the linked passage.
+                writer.Write(PsgIdx);
+
+                // Set the total length in bytes for the current state of this choice.
+                _byteLength = (UInt32)writer.Stream.Length;
+
+                return writer.Stream.ToArray();
+            }
+
+            public string ToString(string aPrefix = "") {
+                string output = "";
+                output += aPrefix + "[Choice]\n";
+                output += aPrefix + aPrefix + "Flags: " + Bits.GetBinaryString(_attributes) + "\n";
+                if (_conditionOps.Count > 0) {
+                    output += aPrefix + aPrefix + "[Conditions]\n";
+                    foreach (Operation op in _conditionOps) {
+                        output += op.ToString(aPrefix + aPrefix);
+                    }
+                }
+                if (Body.Length > 0) {
+                    output += aPrefix + aPrefix + Body.Trim() + " -> " + PsgLink + ": " + PsgIdx + "\n";
+                } else {
+                    output += aPrefix + aPrefix + "-> " + PsgLink + "\n";
+                }
+                if (_updateOps.Count > 0) {
+                    output += aPrefix + "[Updates]\n";
+                    foreach (Operation op in _updateOps) {
+                        output += op.ToString(aPrefix + aPrefix);
+                    }
+                }
+                return output;
+            }
+        }
+
+        public class Operation
+        {
+            // For operations, is an operand a raw value a variable, or another operation.
+            public enum OperandType {
+                NotSet = 0,
+                Raw,
+                Var,
+                Op,
+                Visits
+            }
+
+            public enum OperationType
+            {
+                NotSet = 0,
+                EqualTo, // Returns 0 or 1
+                NotEqualTo, // Returns 0 or 1
+                GreaterThan, // Returns 0 or 1
+                LessThan, // Returns 0 or 1
+                EqualGreater, // Returns 0 or 1
+                EqualLess, // Returns 0 or 1
+                AND, // Returns 0 or 1
+                OR, // Returns 0 or 1
+                XOR, // Returns 0 or 1
+                NAND, // Returns 0 or 1
+                NOR, // Returns 0 or 1
+                XNOR, // Returns 0 or 1
+                ChoiceVisible, // Returns 0 or 1
+                Modulus, // Returns int16_t - remainder of division
+                Set, // Returns int16_t - value of the right operand
+                Plus, // Returns int16_t
+                Minus, // Returns int16_t
+                Multiply, // Returns int16_t
+                Divide, // Returns int16_t - non float, whole number
+                Random, // Returns int16_t - takes min & max (inclusive)
+                DiceRoll, // Returns int16_t - take # of dice & # of sides per die
+                IfStatement, // Returns 0 if false, result of right operand if true
+                // ----
+                TOTAL_OPS
+            }
+
+            // OperandType _leftType;
+            // // If left type is operation this will be set.
+            // Operation _leftOp;
+            // Int16 _leftVal;
+            // OpType _opType;
+            // OperandType _rightType;
+            // // If right type is operation this will be set.
+            // Operation _rightOp;
+            // Int16 _rightVal;
+            UInt32 _byteLength;
+
+            public string LeftName { get; set; }
+            public string RightName { get; set; }
+            public OperandType LeftType { get; set; }
+            public Operation LeftOp { get; set; }
+            public Int16 LeftVal { get; set; }
+            public OperationType OpType { get; set; }
+            public OperandType RightType { get; set; }
+            public Operation RightOp { get; set; }
+            public Int16 RightVal { get; set; }
+
+            public Operation() { Operations(); }
+
+            public void DeclareVariable(Int16 aVarIdx, Int16 aValue) {
+                LeftType = OperandType.Var;
+                LeftVal = aVarIdx;
+                OpType = OperationType.Set;
+                RightType = OperandType.Raw;
+                RightVal = aValue;
+            }
+
+            // public void SetLeftVal(OperandType aLeftType, Int16 aLeftVal) {
+            //     _leftType = aLeftType;
+            //     _leftVal = aLeftVal;
+            // }
+
+            // public void SetRightVal(OperandType aRightType, Int16 aRightVal) {
+            //     _rightType = aRightType;
+            //     _rightVal = aRightVal;
+            // }
+
+            // public void SetLeftOp(Operation aOp) {
+            //     _leftType = OperandType.Op;
+            //     _leftOp = aOp;
+            // }
+
+            // public void SetRightOp(Operation aOp) {
+            //     _rightType = OperandType.Op;
+            //     _rightOp = aOp;
+            // }
+
+            public UInt32 GetByteLength() { return _byteLength; }
+
+            public byte[] ToBytes() {
+                //MemoryStream stream = new MemoryStream();
+                SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
+
+                // 1 byte for left/right types; only 4 bits each.
+                byte bothTypes = (byte)LeftType;
+                // Shift the left value to the left side of the byte.
+                bothTypes = (byte)(bothTypes << 4);
+                // Add the right side.
+                bothTypes = (byte)(bothTypes & (byte)RightType);
+                writer.Write(bothTypes);
+
+                // 1 byte for operation type.
+                writer.Write((byte)OpType);
+
+                if (LeftType == OperandType.Op) {
+                    writer.Write(LeftOp.ToBytes());
+                } else {
+                    writer.Write(LeftVal);
+                }
+
+                if (RightType == OperandType.Op) {
+                    writer.Write(RightOp.ToBytes());
+                } else {
+                    writer.Write(RightVal);
+                }
+
+                // Set the total length in bytes for the current state of this operation.
+                _byteLength = (UInt32)writer.Stream.Length;
+
+                return writer.Stream.ToArray();
+            }
+
+            public string ToString(string aPrefix = "") {
+                string output = "";
+
+                output += aPrefix + "( ";
+                if (LeftType == OperandType.Raw) {
+                    output += LeftVal;
+                } else if (LeftType == OperandType.Var) {
+                    output += "[" + LeftVal + "]";
+                } else if (LeftType == OperandType.Visits) {
+                    output += "p[" + LeftVal + "]";
+                } else { // Must be another operation.
+                    output += LeftOp.ToString();
+                }
+
+                output += " " + _operationNames[(byte)OpType] + " ";
+
+                if (RightType == OperandType.Raw) {
+                    output += RightVal;
+                } else if (RightType == OperandType.Var) {
+                    output += "[" + RightVal + "]";
+                } else if (RightType == OperandType.Visits) {
+                    output += "p[" + RightVal + "]";
+                } else { // Must be another operation.
+                    output += RightOp.ToString();
+                }
+
+                output += " )\n";
+
+                return output;
+            }
+
+            static void Operations() {
+                _operationNames = new string[(int)OperationType.TOTAL_OPS];
+
+                _operationNames [(int)OperationType.NotSet] = "n/a";
+                _operationNames [(int)OperationType.EqualTo] = "==";
+                _operationNames [(int)OperationType.NotEqualTo] = "!=";
+                _operationNames [(int)OperationType.GreaterThan] = ">";
+                _operationNames [(int)OperationType.LessThan] = "<";
+                _operationNames [(int)OperationType.EqualGreater] = ">=";
+                _operationNames [(int)OperationType.EqualLess] = "<=";
+                _operationNames [(int)OperationType.AND] = "AND";
+                _operationNames [(int)OperationType.OR] = "OR";
+                _operationNames [(int)OperationType.XOR] = "XOR";
+                _operationNames [(int)OperationType.NAND] = "NAND";
+                _operationNames [(int)OperationType.NOR] = "NOR";
+                _operationNames [(int)OperationType.XNOR] = "XNOR";
+                _operationNames [(int)OperationType.ChoiceVisible] = "ChoiceVisible";
+                _operationNames [(int)OperationType.Modulus] = "%";
+                _operationNames [(int)OperationType.Set] = "=";
+                _operationNames [(int)OperationType.Plus] = "+";
+                _operationNames [(int)OperationType.Minus] = "-";
+                _operationNames [(int)OperationType.Multiply] = "*";
+                _operationNames [(int)OperationType.Divide] = "/";
+                _operationNames [(int)OperationType.Random] = "Rand";
+                _operationNames [(int)OperationType.DiceRoll] = "DiceRoll";
+                _operationNames [(int)OperationType.IfStatement] = "If";
+
+                for (int i = 0; i < (int)OperationType.TOTAL_OPS; ++i) {
+                    if (_operationNames [i] == null) {
+                        throw new System.Exception ("Operation not accounted for in serialization.");
+                    }
+                }
+            }
+
+            static string[] _operationNames;
+        }
+
+
         public static void WriteBinary(SimpleChoosatron.Writer aWriter, Container aContainer) {
             // Parse for all passage content.            
             ParseRuntimeContainer(aContainer);
@@ -473,7 +510,7 @@ namespace Ink.Runtime
             }
 
             // DEBUG: Print passages as strings.
-            foreach (ChoosatronPassage p in _passages) {
+            foreach (Passage p in _passages) {
                 Console.Write(p.ToString("    "));
             }
 
@@ -486,7 +523,7 @@ namespace Ink.Runtime
             Console.WriteLine("Var Count: " + _vars.Count);
             foreach (var map in _varToIdx) {
                 Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
-                ChoosatronOperation op = new ChoosatronOperation();
+                Operation op = new Operation();
                 op.DeclareVariable((Int16)map.Value, _vars[map.Value]);
                 _passages[0].AddUpdate(op);
             }
@@ -496,7 +533,7 @@ namespace Ink.Runtime
 
             UInt32 storySize = 0;
             // Generate passage bytes.
-            foreach (ChoosatronPassage p in _passages) {
+            foreach (Passage p in _passages) {
                 _psgOffsets.Add(storySize);
                 storySize += p.GenerateBytes();
             }
@@ -519,14 +556,14 @@ namespace Ink.Runtime
             }
 
             // Passage Data
-            foreach (ChoosatronPassage p in _passages) {
+            foreach (Passage p in _passages) {
                 aWriter.Write(p.GetBytes());
             }
         }
 
         static void ResolveReferences() {
-            foreach (ChoosatronPassage p in _passages) {
-                foreach (ChoosatronChoice c in p.GetChoices()) {
+            foreach (Passage p in _passages) {
+                foreach (Choice c in p.GetChoices()) {
                     if (_psgToIdx.ContainsKey(c.PsgLink)) {
                         c.PsgIdx = _psgToIdx[c.PsgLink];
                     } else {
@@ -593,7 +630,7 @@ namespace Ink.Runtime
                             Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
                             // Depth in data structure where we are starting a new passage.
                             _newPsgDepth = _dataDepth;
-                            _psg = new ChoosatronPassage();
+                            _psg = new Passage();
                             _psg.Name = namedContainer.path.ToString();
                             _state = State.NamedContent;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
@@ -708,7 +745,7 @@ namespace Ink.Runtime
                         // throw new System.Exception(error);
                         Console.WriteLine("[WARNING] " + error + " Defaulting to 'append behavior.");
                     }
-                    ChoosatronChoice c = new ChoosatronChoice();
+                    Choice c = new Choice();
                     c.PsgLink = divert.targetPath.componentsString;
                     c.IsInvisibleDefault = true;
                     _psg.SetAppendFlag(true);
@@ -745,7 +782,7 @@ namespace Ink.Runtime
                 // PassageContent means no text was found yet but should have been.
                 if (_state == State.Passage || _state == State.PassageContent) {
                     Console.WriteLine("<START CHOICE");
-                    _choice = new ChoosatronChoice();
+                    _choice = new Choice();
                     _choice.SetFlags(flags);
                     
                     if (_state == State.PassageContent) {
@@ -793,6 +830,8 @@ namespace Ink.Runtime
                 //writer.Write(intVal.value);
                 if (_state == State.VarDeclarations) {
                     _tempVarVal = (Int16)intVal.value;
+                } else if (_evaluating) {
+
                 }
                 return;
             }
@@ -895,7 +934,17 @@ namespace Ink.Runtime
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
                 Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
-                if (_state == State.PassageContent) {
+                // Should be a Passage Update
+                if (_state == State.NamedContent) {
+                    if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
+                        _evaluating = true;
+                        _state = State.PassageUpdate;
+                        _opStack.Add(new Operation());
+                    } else if (controlCmd.commandType == ControlCommand.CommandType.End) {
+                        _evaluating = false;
+                        _state = State.NamedContent;
+                    }
+                } else if (_state == State.PassageContent) {
                     _state = State.Passage;
                     _psg.Body = _psg.Body.Trim();
                 } else if (_state == State.Passage) {
@@ -929,9 +978,19 @@ namespace Ink.Runtime
                 if (readCountPath != null) {
                     Console.WriteLine(_indent + "[VarRef] CNT? " + readCountPath);
                     //writer.WriteProperty("CNT?", readCountPath);
+                    if (_evaluating) {
+                        if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
+                            //_opStack[_opIdx].LeftType = 
+                        }
+                    }
                 } else {
                     Console.WriteLine(_indent + "[VarRef] VAR? " + varRef.name);
                     //writer.WriteProperty("VAR?", varRef.name);
+                    if (_evaluating) {
+                        if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
+                            //_opStack[_opIdx].LeftType = 
+                        }
+                    }
                 }
                 return;
             }
@@ -946,6 +1005,10 @@ namespace Ink.Runtime
                 if (!varAss.isNewDeclaration) {
                     //writer.WriteProperty("re", true);
                     Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
+                    // Either Passage or Choice update.
+                    if (_evaluating) {
+                        
+                    }
                 } else {
                     string varName = varAss.isGlobal ? aParentPath + " " + varAss.variableName : varAss.variableName;
                     Console.WriteLine(_indent + "[VarAss] " + key + varName);
@@ -982,7 +1045,7 @@ namespace Ink.Runtime
             }
 
             // Used when serialising save state only
-            var choice = aObj as Choice;
+            var choice = aObj as Ink.Runtime.Choice;
             if (choice) {
                 Console.WriteLine(_indent + "[Choice] " + choice);
                 //WriteChoice(writer, choice);
@@ -1196,14 +1259,17 @@ namespace Ink.Runtime
         static string _indent = "";
         static int _dataDepth = 0;
         static State _state = State.None;
-        static ChoosatronPassage _psg;
-        static ChoosatronChoice _choice;
+        static bool _evaluating = false;
+        static Passage _psg;
+        static Choice _choice;
+        static List<Operation> _opStack;
+        static UInt16 _opIdx = 0;
         static string _choiceOnlyContent;
         static UInt16 _varIdx = 0;
         static int _newPsgDepth = 0;
         static Int16 _tempVarVal = -999;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
-        static List<ChoosatronPassage> _passages = new List<ChoosatronPassage>();
+        static List<Passage> _passages = new List<Passage>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
         static List<UInt32> _psgOffsets = new List<UInt32>();
         static Dictionary<string, UInt16> _varToIdx = new Dictionary<string, UInt16>();
@@ -1236,6 +1302,7 @@ namespace Ink.Runtime
         enum State {
             None,
             NamedContent,
+            PassageUpdate,
             PassageContent,
             Passage,
             GluePassage,
