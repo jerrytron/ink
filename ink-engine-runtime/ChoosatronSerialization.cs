@@ -321,8 +321,8 @@ namespace Ink.Runtime
                 NotEqualTo, // Returns 0 or 1
                 GreaterThan, // Returns 0 or 1
                 LessThan, // Returns 0 or 1
-                EqualGreater, // Returns 0 or 1
-                EqualLess, // Returns 0 or 1
+                GreaterOrEquals, // Returns 0 or 1
+                LessOrEquals, // Returns 0 or 1
                 AND, // Returns 0 or 1
                 OR, // Returns 0 or 1
                 XOR, // Returns 0 or 1
