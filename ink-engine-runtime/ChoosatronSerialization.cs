@@ -135,10 +135,12 @@ namespace Ink.Runtime
                 if (_updateOps.Count > 0) {
                     output += aPrefix + "[Updates]\n";
                     foreach (Operation op in _updateOps) {
-                        output += op.ToString(aPrefix);
+                        output += aPrefix + op.ToString(aPrefix) + "\n";
                     }
                 }
-                output += aPrefix + Body + "\n";
+                output += aPrefix + "[BodyStart]\n";
+                output += Body + "\n";
+                output += aPrefix + "[BodyEnd]\n";
                 if (_choices.Count > 0) {
                     foreach (Choice c in _choices) {
                         output += c.ToString(aPrefix);
@@ -155,6 +157,9 @@ namespace Ink.Runtime
             }
 
             private void ResolveAttributes() {
+                // Trim the body text.
+                Body = Body.Trim();
+
                 if (_choices.Count == 1) {
                     string body = _choices[0].Body;
                     if (body.Length == 0 || body.Trim().ToLower() == "<append>") {
@@ -285,7 +290,7 @@ namespace Ink.Runtime
                 if (_conditionOps.Count > 0) {
                     output += aPrefix + aPrefix + "[Conditions]\n";
                     foreach (Operation op in _conditionOps) {
-                        output += op.ToString(aPrefix + aPrefix);
+                        output += aPrefix + op.ToString(aPrefix + aPrefix) + "\n";
                     }
                 }
                 if (Body.Length > 0) {
@@ -296,7 +301,7 @@ namespace Ink.Runtime
                 if (_updateOps.Count > 0) {
                     output += aPrefix + "[Updates]\n";
                     foreach (Operation op in _updateOps) {
-                        output += op.ToString(aPrefix + aPrefix);
+                        output += aPrefix + op.ToString(aPrefix + aPrefix) + "\n";
                     }
                 }
                 return output;
@@ -794,6 +799,7 @@ namespace Ink.Runtime
         static void ParseRuntimeObject(Runtime.Object aObj, string aParentPath) {
             var container = aObj as Container;
             if (container) {
+                Console.WriteLine(_indent + "[Container] " + container.name);
                 //_indent += kIndent;
                 ParseRuntimeContainer(container);
                 //_indent = _indent.Remove(_indent.Length - kIndent.Length);
@@ -848,7 +854,7 @@ namespace Ink.Runtime
                 } else if (_state == State.GluePassage || _state == State.PassageContent) {
                     // If using a 'raw' divert, should have a glue after content.
                     // Or possibly forget '*' or '+' before divert to make it a choice.
-                    if (_state == State.PassageContent) {
+                    if (_evaluating == false && _state == State.PassageContent) {
                         string error = "Either missing glue '<>' at the end of passage '"
                          + _psg.Name + "' content if using a divert directly after, or missing a choice command just before the divert ('*' or '+').";
                         // throw new System.Exception(error);
@@ -964,12 +970,12 @@ namespace Ink.Runtime
                 if (strVal.isNewline) {
                     Console.WriteLine(_indent + "^ Newline");
                     if (_state == State.PassageContent) {
-                        _psg.Body += "\n";
+                        _psg.Body += '\n';
                     }
                     //writer.Write("\\n", escape:false);  
                 } else {
                     // Is this a passage?
-                    if (_state == State.NamedContent) {
+                    if (_state == State.NamedContent || _state == State.PassageContent) {
                         Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
                         _psg.Body += strVal.value;
@@ -1050,29 +1056,33 @@ namespace Ink.Runtime
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
                 Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
-                // Should be a Passage Update
-                if (_state == State.NamedContent) {
-                    if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
+
+                if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
+                    // Should be a Passage Update
+                    if (_state == State.NamedContent) {
                         _evaluating = true;
                         _state = State.PassageUpdate;
                         _opStack.Add(new Operation());
                         Console.WriteLine("<Start Eval>");
+                    } else if (_state == State.Passage || _state == State.PassageContent) {
+                        // _evaluating = true;
+                        _state = State.Passage;
                     }
-                } else if (_state == State.PassageUpdate) {
-                    if (controlCmd.commandType == ControlCommand.CommandType.EvalEnd) {
-                        // Var assignment comes after this.
-                        
+                } else if (controlCmd.commandType == ControlCommand.CommandType.EvalEnd) {
+                    if (_state == State.Passage || _state == State.PassageContent) {
+                        // _evaluating = false;
+                        // Console.WriteLine("Finished parsing choice condition?");
+                        // Console.WriteLine(_opStack[0].ToString());
                     }
-                } else if (_state == State.PassageContent) {
-                    _state = State.Passage;
-                    _psg.Body = _psg.Body.Trim();
-                } else if (_state == State.Passage) {
-                    if (controlCmd.commandType == ControlCommand.CommandType.End) {
-                        _psg.IsEnding = true;
+                } else if (controlCmd.commandType == ControlCommand.CommandType.BeginString) {
+
+                } else if (controlCmd.commandType == ControlCommand.CommandType.EndString) {
+
+                } else if (controlCmd.commandType == ControlCommand.CommandType.End) {
+                    if (_state == State.Passage || _state == State.PassageContent) {
+                        _state = State.Passage;
                     }
                 }
-                // + _controlCommandNames[(int)controlCmd.commandType]);
-                //writer.Write(_controlCommandNames[(int)controlCmd.commandType]);
                 return;
             }
 
