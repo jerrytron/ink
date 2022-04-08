@@ -317,12 +317,12 @@ namespace Ink.Runtime
             public enum OperationType
             {
                 NotSet = 0,
-                EqualTo, // Returns 0 or 1
-                NotEqualTo, // Returns 0 or 1
-                GreaterThan, // Returns 0 or 1
-                LessThan, // Returns 0 or 1
-                GreaterOrEquals, // Returns 0 or 1
-                LessOrEquals, // Returns 0 or 1
+                Equal, // Returns 0 or 1
+                NotEquals, // Returns 0 or 1
+                Greater, // Returns 0 or 1
+                Less, // Returns 0 or 1
+                GreaterThanOrEquals, // Returns 0 or 1
+                LessThanOrEquals, // Returns 0 or 1
                 AND, // Returns 0 or 1
                 OR, // Returns 0 or 1
                 XOR, // Returns 0 or 1
@@ -330,15 +330,19 @@ namespace Ink.Runtime
                 NOR, // Returns 0 or 1
                 XNOR, // Returns 0 or 1
                 ChoiceVisible, // Returns 0 or 1
-                Modulus, // Returns int16_t - remainder of division
-                Set, // Returns int16_t - value of the right operand
+                Mod, // Returns int16_t - remainder of division
+                Assign, // Returns int16_t - value of the right operand
                 Add, // Returns int16_t
                 Subtract, // Returns int16_t
                 Multiply, // Returns int16_t
                 Divide, // Returns int16_t - non float, whole number
                 Random, // Returns int16_t - takes min & max (inclusive)
-                DiceRoll, // Returns int16_t - take # of dice & # of sides per die
+                Dice, // Returns int16_t - take # of dice & # of sides per die
                 IfStatement, // Returns 0 if false, result of right operand if true
+                Negate, // Returns int16_t - positive val becomes negative, negative val becomes positive
+                Not, // Returns 0 or 1 - if val not 0, returns 0, if val is 0, returns 1
+                Min, // Returns int16_t - the smaller of the two numbers
+                Max, // Returns int16_t - the larger of the two numbers
                 // ----
                 TOTAL_OPS
             }
@@ -376,7 +380,7 @@ namespace Ink.Runtime
             public void DeclareVariable(Int16 aVarIdx, Int16 aValue) {
                 LeftType = OperandType.Var;
                 LeftVal = aVarIdx;
-                _opType = OperationType.Set;
+                _opType = OperationType.Assign;
                 RightType = OperandType.Raw;
                 RightVal = aValue;
             }
@@ -390,7 +394,7 @@ namespace Ink.Runtime
                     LeftType = OperandType.Var;
                     LeftVal = 0;
                     LeftName = aName;
-                    _opType = OperationType.Set;
+                    _opType = OperationType.Assign;
                     return true;
                 }
                 return false;
@@ -507,8 +511,10 @@ namespace Ink.Runtime
                     output += "[" + LeftName + "]";
                 } else if (LeftType == OperandType.Visits) {
                     output += "p[" + LeftName + "]";
-                } else { // Must be another operation.
+                } else if (LeftType == OperandType.Op) {
                     output += LeftOp.ToString();
+                } else { // Not set yet.
+                    output += "<NOT SET>";
                 }
 
                 output += " " + _operationNames[(byte)_opType] + " ";
@@ -519,8 +525,10 @@ namespace Ink.Runtime
                     output += "[" + RightName + "]";
                 } else if (RightType == OperandType.Visits) {
                     output += "p[" + RightName + "]";
-                } else { // Must be another operation.
+                } else if (RightType == OperandType.Op) {
                     output += RightOp.ToString();
+                } else { // Not set yet.
+                    output += "<NOT SET>";
                 }
 
                 output += " )";
@@ -531,13 +539,13 @@ namespace Ink.Runtime
             static void Operations() {
                 _operationNames = new string[(int)OperationType.TOTAL_OPS];
 
-                _operationNames [(int)OperationType.NotSet] = "n/a";
-                _operationNames [(int)OperationType.EqualTo] = "==";
-                _operationNames [(int)OperationType.NotEqualTo] = "!=";
-                _operationNames [(int)OperationType.GreaterThan] = ">";
-                _operationNames [(int)OperationType.LessThan] = "<";
-                _operationNames [(int)OperationType.GreaterOrEquals] = ">=";
-                _operationNames [(int)OperationType.LessOrEquals] = "<=";
+                _operationNames [(int)OperationType.NotSet] = "<n/a>";
+                _operationNames [(int)OperationType.Equal] = "==";
+                _operationNames [(int)OperationType.NotEquals] = "!=";
+                _operationNames [(int)OperationType.Greater] = ">";
+                _operationNames [(int)OperationType.Less] = "<";
+                _operationNames [(int)OperationType.GreaterThanOrEquals] = ">=";
+                _operationNames [(int)OperationType.LessThanOrEquals] = "<=";
                 _operationNames [(int)OperationType.AND] = "AND";
                 _operationNames [(int)OperationType.OR] = "OR";
                 _operationNames [(int)OperationType.XOR] = "XOR";
@@ -545,15 +553,19 @@ namespace Ink.Runtime
                 _operationNames [(int)OperationType.NOR] = "NOR";
                 _operationNames [(int)OperationType.XNOR] = "XNOR";
                 _operationNames [(int)OperationType.ChoiceVisible] = "ChoiceVisible";
-                _operationNames [(int)OperationType.Modulus] = "%";
-                _operationNames [(int)OperationType.Set] = "=";
+                _operationNames [(int)OperationType.Mod] = "%";
+                _operationNames [(int)OperationType.Assign] = "=";
                 _operationNames [(int)OperationType.Add] = "+";
                 _operationNames [(int)OperationType.Subtract] = "-";
                 _operationNames [(int)OperationType.Multiply] = "*";
                 _operationNames [(int)OperationType.Divide] = "/";
-                _operationNames [(int)OperationType.Random] = "Rand";
-                _operationNames [(int)OperationType.DiceRoll] = "DiceRoll";
+                _operationNames [(int)OperationType.Random] = "RANDOM";
+                _operationNames [(int)OperationType.Dice] = "DICE";
                 _operationNames [(int)OperationType.IfStatement] = "If";
+                _operationNames [(int)OperationType.Negate] = "_";
+                _operationNames [(int)OperationType.Not] = "!";
+                _operationNames [(int)OperationType.Min] = "MIN";
+                _operationNames [(int)OperationType.Max] = "MAX";
 
                 for (int i = 0; i < (int)OperationType.TOTAL_OPS; ++i) {
                     if (_operationNames [i] == null) {
@@ -569,20 +581,15 @@ namespace Ink.Runtime
             static string[] _operationNames;
 
             static Dictionary<string, OperationType> _functionMap = new Dictionary<string, OperationType> {
-                { NativeFunctionCall.Equal, OperationType.EqualTo },
-                { NativeFunctionCall.NotEquals, OperationType.NotEqualTo },
-                { NativeFunctionCall.Greater, OperationType.GreaterThan },
-                { NativeFunctionCall.Less, OperationType.LessThan },
-                { NativeFunctionCall.GreaterThanOrEquals, OperationType.GreaterOrEquals },
-                { NativeFunctionCall.LessThanOrEquals, OperationType.LessOrEquals },
+                { NativeFunctionCall.Equal, OperationType.Equal },
+                { NativeFunctionCall.NotEquals, OperationType.NotEquals },
+                { NativeFunctionCall.Greater, OperationType.Greater },
+                { NativeFunctionCall.Less, OperationType.Less },
+                { NativeFunctionCall.GreaterThanOrEquals, OperationType.GreaterThanOrEquals },
+                { NativeFunctionCall.LessThanOrEquals, OperationType.LessThanOrEquals },
                 { NativeFunctionCall.And, OperationType.AND },
                 { NativeFunctionCall.Or, OperationType.OR },
-                // Need special logic for this one: Q = NOT( A ) = A NAND A
-                { NativeFunctionCall.Not, OperationType.NAND },
-                // Other bitwise operations aren't available.
-                { NativeFunctionCall.Mod, OperationType.Modulus },
-                // Set is handled manually when variable assignment occurs.
-                { "SET", OperationType.Set },
+                { NativeFunctionCall.Mod, OperationType.Mod },
                 { NativeFunctionCall.Add, OperationType.Add },
                 { NativeFunctionCall.Subtract, OperationType.Subtract },
                 { NativeFunctionCall.Multiply, OperationType.Multiply },
@@ -590,8 +597,12 @@ namespace Ink.Runtime
                 // This is a ControlCommand.
                 { "RANDOM", OperationType.Random },
                 // Let's try custom stuff and see what happens.
-                { "DICEROLL", OperationType.DiceRoll }
+                { "DICE", OperationType.Dice },
                 // I believe Ink handles 'If/Else' sort of stuff.
+                { NativeFunctionCall.Negate, OperationType.Negate },
+                { NativeFunctionCall.Not, OperationType.Not },
+                { NativeFunctionCall.Min, OperationType.Min },
+                { NativeFunctionCall.Max, OperationType.Max }
             };
         }
 
@@ -1075,22 +1086,41 @@ namespace Ink.Runtime
                 }
                 Console.WriteLine(_indent + "[Function] " + name);
                 //writer.Write(name);
-
+                
                 if (_evaluating) {
+                    // // DEBUG: Output every operation on the stack.
+                    // for (int i = 0; i < _opStack.Count; i++) {
+                    //    Console.WriteLine("PRE-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                    // }
                     // This isn't the first operation required and second operations only has left term.
                     if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
-                        if (_opIdx == 1) {
-                            if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], name)) {
-                                throw new System.Exception ("Error setting operation type: " + name);
-                            } else {
-                                _opStack.RemoveAt(0);
+                        // New operation is empty, must use previous operations.
+                        if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                            _opStack[_opIdx].SetOpType(name);
+                            _opStack.RemoveAt(_opIdx-1);
+                            _opStack.RemoveAt(_opIdx-2);
+                            _opIdx--;
+                            _opStack.Add(new Operation());
+                        } else {
+                            if (_opIdx > 0) {
+                                if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], name)) {
+                                    throw new System.Exception ("Error setting operation type: " + name);
+                                }
+                                _opStack.RemoveAt(_opIdx-1);
                                 _opStack.Add(new Operation());
                             }
                         }
+                    // Right term is set.
                     } else {
                         _opStack[_opIdx].SetOpType(name);
                         _opIdx++;
                         _opStack.Add(new Operation());
+                    }
+                    // DEBUG: Output every operation on the stack.
+                    for (int i = 0; i < _opStack.Count; i++) {
+                       Console.WriteLine("POST-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
                     }
                 }
                 return;
@@ -1134,14 +1164,15 @@ namespace Ink.Runtime
                     // Either Passage or Choice update.
                     if (_evaluating) {
                         if (_state == State.PassageUpdate) {
-                            if (_opStack.Count > 2) {
-                                throw new System.Exception ("Should only ever have up to two operations in the operation stack. It has: " + _opStack.Count);
-                            }
+                            // if (_opStack.Count > 2) {
+                            //     throw new System.Exception ("Should only ever have up to two operations in the operation stack. It has: " + _opStack.Count);
+                            // }
+                            // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
                             if (_opIdx == 1) {
                                 if (_opStack[_opIdx].IsEmpty()) {
                                     _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
                                     _opStack[_opIdx].AddTerm(_opStack[0]);
-                                    _opStack[_opIdx].SetOpType(Operation.OperationType.Set);
+                                    _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
                                     _opStack.RemoveAt(0);
                                     _opIdx = 0;
                                 }
@@ -1150,6 +1181,8 @@ namespace Ink.Runtime
                                 _opStack[_opIdx].InjectVarLeft(varAss.variableName);
                             }
                             Console.WriteLine("<End Eval: " + _opStack[0].ToString());
+                            _psg.AddUpdate(_opStack[0]);
+                            _opStack.Clear();
                             _evaluating = false;
                             _state = State.NamedContent;
                         }
