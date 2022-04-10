@@ -224,6 +224,14 @@ namespace Ink.Runtime
                 Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
             }
 
+            public void AddCondition(Operation aCondition) {
+                _conditionOps.Add(aCondition);
+            }
+
+            public void AddUpdate(Operation aUpdate) {
+                _updateOps.Add(aUpdate);
+            }
+
             public string GetChoiceText() {
                 return StartContent + ChoiceOnlyContent;
             }
@@ -299,7 +307,7 @@ namespace Ink.Runtime
                     output += aPrefix + aPrefix + "-> " + PsgLink + "\n";
                 }
                 if (_updateOps.Count > 0) {
-                    output += aPrefix + "[Updates]\n";
+                    output += aPrefix + aPrefix + "[Updates]\n";
                     foreach (Operation op in _updateOps) {
                         output += aPrefix + op.ToString(aPrefix + aPrefix) + "\n";
                     }
@@ -377,6 +385,13 @@ namespace Ink.Runtime
 
             public bool IsEmpty() {
                 if (LeftType == OperandType.NotSet && RightType == OperandType.NotSet) {
+                    return true;
+                }
+                return false;
+            }
+
+            public bool IsFull() {
+                if (LeftType != OperandType.NotSet && RightType != OperandType.NotSet) {
                     return true;
                 }
                 return false;
@@ -600,7 +615,7 @@ namespace Ink.Runtime
                 { NativeFunctionCall.Multiply, OperationType.Multiply },
                 { NativeFunctionCall.Divide, OperationType.Divide },
                 // This is a ControlCommand.
-                { "RANDOM", OperationType.Random },
+                { ControlCommand.CommandType.Random.ToString(), OperationType.Random },
                 // Let's try custom stuff and see what happens.
                 { "DICE", OperationType.Dice },
                 // I believe Ink handles 'If/Else' sort of stuff.
@@ -637,9 +652,6 @@ namespace Ink.Runtime
             Console.WriteLine("Var Count: " + _vars.Count);
             foreach (var map in _varToIdx) {
                 Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
-                Operation op = new Operation();
-                op.DeclareVariable((Int16)map.Value, _vars[map.Value]);
-                _passages[0].AddUpdate(op);
             }
 
             // Update choice links to match passage indexes.
@@ -758,7 +770,7 @@ namespace Ink.Runtime
                         }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
-                            _state = State.ChoiceOutputContent;
+                            _state = State.ChoiceContent;
                             int choiceIdx = int.Parse(name.Split('-')[1]);
                             Console.WriteLine(_indent + kIndent + "<Choice Idx: " + choiceIdx);
                             _choice = _psg.GetChoice(choiceIdx);
@@ -845,6 +857,12 @@ namespace Ink.Runtime
                 if (divert.externalArgs > 0) {
                     //writer.WriteProperty("exArgs", divert.externalArgs);
                 }
+
+                // Don't use diverts inside of an evaluation.
+                if (_evaluating == true) {
+                    return;
+                }
+
                 // This isn't a passage, but a forward to a passage.
                 if (_state == State.NamedContent) {
                     Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
@@ -854,20 +872,23 @@ namespace Ink.Runtime
                 } else if (_state == State.GluePassage || _state == State.PassageContent) {
                     // If using a 'raw' divert, should have a glue after content.
                     // Or possibly forget '*' or '+' before divert to make it a choice.
-                    if (_evaluating == false && _state == State.PassageContent) {
+                    if (_state == State.PassageContent) {
                         string error = "Either missing glue '<>' at the end of passage '"
                          + _psg.Name + "' content if using a divert directly after, or missing a choice command just before the divert ('*' or '+').";
                         // throw new System.Exception(error);
-                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append behavior.");
+                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior.");
                     }
                     Choice c = new Choice();
                     c.PsgLink = divert.targetPath.componentsString;
                     c.IsInvisibleDefault = true;
                     _psg.SetAppendFlag(true);
+                    Console.WriteLine("<PUSH APPEND CHOICE");
                     _psg.AddChoice(c);
                     _state = State.Passage;
-                } else if (_state == State.ChoiceLink || _state == State.ChoiceOutputContent) {
+                } else if (_state == State.ChoiceContent) {
                     if (!targetStr.StartsWith(".^")) {
+                        // In case it was a newline prior to divert.
+                        _watchForChoiceUpdate = false;
                         Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
                         _choice.PsgLink = divert.targetPath.componentsString;
                         if (!_choice.IsInvisibleDefault) {
@@ -897,7 +918,6 @@ namespace Ink.Runtime
                 // PassageContent means no text was found yet but should have been.
                 if (_state == State.Passage || _state == State.PassageContent) {
                     Console.WriteLine("<START CHOICE");
-                    _choice = new Choice();
                     _choice.SetFlags(flags);
                     
                     if (_state == State.PassageContent) {
@@ -916,7 +936,7 @@ namespace Ink.Runtime
                         _state = State.ChoiceStartContent;
                         Console.WriteLine("<S:CHOICE START CONTENT");
                     } else {
-                        Console.WriteLine("<S:CHOICE");
+                        Console.WriteLine("<PUSH CHOICE");
                         // Add the unfinished choice to the list and back to passage state.
                         // The next choice might have choice only text.
                         _psg.AddChoice(_choice);
@@ -924,7 +944,7 @@ namespace Ink.Runtime
                         _state = State.Passage;
                     }
                 } else {
-                    throw new System.Exception("Can't parse a choice while not in a passage.");
+                    throw new System.Exception("Can't parse a choice while not in a passage: " + _state);
                 }
                 return;
             }
@@ -934,9 +954,14 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + "[Bool] " + boolVal.value);
                 //writer.Write(boolVal.value);
                 Int16 val = (boolVal.value ? (Int16)1 : (Int16)0);
-                if (_state == State.VarDeclarations) {
-                    _tempVarVal = val;
-                } else if (_evaluating) {
+                // if (_state == State.VarDeclarations) {
+                //     _tempVarVal = val;
+                // }
+                if (_evaluating) {
+                    if (_opStack[_opIdx].IsFull()) {
+                        ProcessFullOperation();
+                    }
+
                     if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Raw, val)) {
                         throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
                     }
@@ -948,11 +973,26 @@ namespace Ink.Runtime
             if (intVal) {
                 Console.WriteLine(_indent + "[Int] " + intVal.value);
                 //writer.Write(intVal.value);
-                if (_state == State.VarDeclarations) {
-                    _tempVarVal = (Int16)intVal.value;
-                } else if (_evaluating) {
+                // if (_state == State.VarDeclarations) {
+                //     _tempVarVal = (Int16)intVal.value;
+                // }
+                if (_evaluating) {
+                    if (_opStack[_opIdx].IsFull()) {
+                        ProcessFullOperation();
+                        // _opStack.Add(new Operation());
+                        // _opIdx++;
+                        // _opStack[_opIdx].LeftType = _opStack[_opIdx-1].RightType;
+                        // _opStack[_opIdx].LeftVal = _opStack[_opIdx-1].RightVal;
+                        // _opStack[_opIdx].LeftOp = _opStack[_opIdx-1].RightOp;
+                        // _opStack[_opIdx].LeftName = _opStack[_opIdx-1].RightName;
+                        // _opStack[_opIdx-1].RightType = Operation.OperandType.Op;
+                    }
+
                     if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Raw, (Int16)intVal.value)) {
                         throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
+                    }
+                    for (int i = 0; i < _opStack.Count; i++) {
+                       Console.WriteLine("Global Var: " + i + ", CURRENT OP: " + _opStack[i].ToString());
                     }
                 }
                 return;
@@ -970,7 +1010,9 @@ namespace Ink.Runtime
                 if (strVal.isNewline) {
                     Console.WriteLine(_indent + "^ Newline");
                     if (_state == State.PassageContent) {
-                        _psg.Body += '\n';
+                        _psg.Body += "\n";
+                    } else if (_state == State.ChoiceContent) {
+                        _watchForChoiceUpdate = true;
                     }
                     //writer.Write("\\n", escape:false);  
                 } else {
@@ -986,16 +1028,16 @@ namespace Ink.Runtime
 
                         // Add the unfinished choice to the list and back to passage state.
                         // The next choice might have choice only text.
+                        Console.WriteLine("<PUSH START TEXT CHOICE");
                         _psg.AddChoice(_choice);
                         _choice = null;
                         _state = State.Passage;
                     } else if (_state == State.Passage) {
                         Console.WriteLine(_indent + "[String] Maybe Choice Only Text: " + strVal.value);
                         _choiceOnlyContent = strVal.value;
-                    } else if (_state == State.ChoiceOutputContent) {
+                    } else if (_state == State.ChoiceContent) {
                         Console.WriteLine(_indent + "[String] Output Text: " + strVal.value);
                         _choice.OutputContent = strVal.value;
-                        _state = State.ChoiceLink;
                         Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetOutputText());
                     } else {
                         Console.WriteLine(_indent + "[String] UNHANDLED: " + strVal.value + " S:" + _state);
@@ -1058,29 +1100,69 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
 
                 if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
+                    
                     // Should be a Passage Update
                     if (_state == State.NamedContent) {
                         _evaluating = true;
                         _state = State.PassageUpdate;
                         _opStack.Add(new Operation());
-                        Console.WriteLine("<Start Eval>");
-                    } else if (_state == State.Passage || _state == State.PassageContent) {
-                        // _evaluating = true;
+                        Console.WriteLine("<Start Psg Update Eval>");
+                    } else if (_state == State.PassageContent) {
                         _state = State.Passage;
+                    } else if (_state == State.ChoiceContent && _watchForChoiceUpdate) {
+                        _evaluating = true;
+                        _watchForChoiceUpdate = false;
+                        _state = State.ChoiceUpdate;
+                        _opStack.Add(new Operation());
+                        Console.WriteLine("<Start Choice Update Eval>");
+                    } else if (_state == State.VarDeclarations) {
+                        _evaluating = true;
+                        _opStack.Add(new Operation());
+                        Console.WriteLine("<Start Var Decl Eval>");
                     }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.EvalEnd) {
-                    if (_state == State.Passage || _state == State.PassageContent) {
-                        // _evaluating = false;
-                        // Console.WriteLine("Finished parsing choice condition?");
-                        // Console.WriteLine(_opStack[0].ToString());
+                    _evaluating = false;
+                    if (_state == State.ChoiceCondition) {
+                        // Always an empty operation at the top of the stack.
+                        _opStack.RemoveAt(_opIdx);
+                        _opIdx = 0;
+                        
+                        if (_opStack.Count == 1) {
+                            Console.WriteLine("<End Choice Condition Eval: " + _opStack[0].ToString());
+                            _choice.AddCondition(_opStack[0]);
+                            _opStack.Clear();
+                        } else {
+                            Console.WriteLine("<End Choice Condition Eval>");
+                        }
+                        _state = State.Passage;
+                    } else if (_state == State.VarDeclarations) {
+                        _opIdx = 0;
+                        _opStack.Clear();
+                        //_state = TODO: Anything to parse after the global vars?
                     }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.BeginString) {
+                    // False alarm, there is another string to evaluate.
+                    if (_state == State.ChoiceCondition) {
+                        _state = State.Passage;
+                        _opStack.Clear();
+                    }
 
                 } else if (controlCmd.commandType == ControlCommand.CommandType.EndString) {
+                    if (_state == State.Passage) {
+                        _evaluating = true;
+                        _choice = new Choice();
+                        Console.WriteLine("<Start Choice Condition Eval>");
+                        _opStack.Add(new Operation());
+                        _state = State.ChoiceCondition;
+                    }
 
                 } else if (controlCmd.commandType == ControlCommand.CommandType.End) {
-                    if (_state == State.Passage || _state == State.PassageContent) {
+                    if (_state == State.PassageContent) {
                         _state = State.Passage;
+                    }
+                } else if (controlCmd.commandType == ControlCommand.CommandType.Random) {
+                    if (_evaluating) {
+                        ProcessOperation(controlCmd.ToString());
                     }
                 }
                 return;
@@ -1098,36 +1180,37 @@ namespace Ink.Runtime
                 //writer.Write(name);
                 
                 if (_evaluating) {
-                    // // DEBUG: Output every operation on the stack.
-                    // for (int i = 0; i < _opStack.Count; i++) {
-                    //    Console.WriteLine("PRE-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
-                    // }
-                    // This isn't the first operation required and second operations only has left term.
-                    if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
-                        // New operation is empty, must use previous operations.
-                        if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
-                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
-                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
-                            _opStack[_opIdx].SetOpType(name);
-                            _opStack.RemoveAt(_opIdx-1);
-                            _opStack.RemoveAt(_opIdx-2);
-                            _opIdx--;
-                            _opStack.Add(new Operation());
-                        } else {
-                            if (_opIdx > 0) {
-                                if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], name)) {
-                                    throw new System.Exception ("Error setting operation type: " + name);
-                                }
-                                _opStack.RemoveAt(_opIdx-1);
-                                _opStack.Add(new Operation());
-                            }
-                        }
-                    // Right term is set.
-                    } else {
-                        _opStack[_opIdx].SetOpType(name);
-                        _opIdx++;
-                        _opStack.Add(new Operation());
+                    // DEBUG: Output every operation on the stack.
+                    for (int i = 0; i < _opStack.Count; i++) {
+                       Console.WriteLine("PRE-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
                     }
+                    
+                    ProcessOperation(name);
+                    // if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
+                    //     // New operation is empty, must use previous operations.
+                    //     if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
+                    //         _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                    //         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                    //         _opStack[_opIdx].SetOpType(name);
+                    //         _opStack.RemoveAt(_opIdx-1);
+                    //         _opStack.RemoveAt(_opIdx-2);
+                    //         _opIdx--;
+                    //         _opStack.Add(new Operation());
+                    //     } else {
+                    //         if (_opIdx > 0) {
+                    //             if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], name)) {
+                    //                 throw new System.Exception ("Error setting operation type: " + name);
+                    //             }
+                    //             _opStack.RemoveAt(_opIdx-1);
+                    //             _opStack.Add(new Operation());
+                    //         }
+                    //     }
+                    // // Right term is set.
+                    // } else {
+                    //     _opStack[_opIdx].SetOpType(name);
+                    //     _opIdx++;
+                    //     _opStack.Add(new Operation());
+                    // }
                     // DEBUG: Output every operation on the stack.
                     for (int i = 0; i < _opStack.Count; i++) {
                        Console.WriteLine("POST-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
@@ -1135,7 +1218,6 @@ namespace Ink.Runtime
                 }
                 return;
             }
-
 
             // Variable reference
             var varRef = aObj as VariableReference;
@@ -1145,6 +1227,10 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "[VarRef] CNT? " + varRef.path.ToString());
                     //writer.WriteProperty("CNT?", readCountPath);
                     if (_evaluating) {
+                        if (_opStack[_opIdx].IsFull()) {
+                            ProcessFullOperation();
+                        }
+
                         if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Visits, varRef.path.ToString())) {
                             throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
                         }
@@ -1153,6 +1239,10 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "[VarRef] VAR? " + varRef.name);
                     //writer.WriteProperty("VAR?", varRef.name);
                     if (_evaluating) {
+                        if (_opStack[_opIdx].IsFull()) {
+                            ProcessFullOperation();
+                        }
+
                         if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Var, varRef.name)) {
                             throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
                         }
@@ -1172,41 +1262,74 @@ namespace Ink.Runtime
                     //writer.WriteProperty("re", true);
                     Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
                     // Either Passage or Choice update.
-                    if (_evaluating) {
-                        if (_state == State.PassageUpdate) {
-                            // if (_opStack.Count > 2) {
-                            //     throw new System.Exception ("Should only ever have up to two operations in the operation stack. It has: " + _opStack.Count);
-                            // }
-                            // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
-                            if (_opIdx == 1) {
-                                if (_opStack[_opIdx].IsEmpty()) {
-                                    _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
-                                    _opStack[_opIdx].AddTerm(_opStack[0]);
-                                    _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
-                                    _opStack.RemoveAt(0);
-                                    _opIdx = 0;
-                                }
-                            // Op index is 0. Simple assignment.
-                            } else {
-                                _opStack[_opIdx].InjectVarLeft(varAss.variableName);
-                            }
-                            Console.WriteLine("<End Eval: " + _opStack[0].ToString());
-                            _psg.AddUpdate(_opStack[0]);
-                            _opStack.Clear();
-                            _evaluating = false;
-                            _state = State.NamedContent;
+                    // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
+                    if (_opIdx == 1) {
+                        if (_opStack[_opIdx].IsEmpty()) {
+                            _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
+                            _opStack[_opIdx].AddTerm(_opStack[0]);
+                            _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
+                            _opStack.RemoveAt(0);
+                            _opIdx = 0;
+                        }
+                    // Op index is 0. Simple assignment.
+                    } else {
+                        _opStack[_opIdx].InjectVarLeft(varAss.variableName);
+                    }
+
+                    if (_state == State.PassageUpdate) {
+                        Console.WriteLine("<End Psg Update Eval: " + _opStack[0].ToString());
+                        _psg.AddUpdate(_opStack[0]);
+                        _state = State.NamedContent;
+                        _opStack.Clear();
+                        // _evaluating = false;
+                    } else if (_state == State.ChoiceUpdate) {
+                        Console.WriteLine("<End Choice Update Eval: " + _opStack[0].ToString());
+                        _choice.AddUpdate(_opStack[0]);
+                        _state = State.ChoiceContent;
+                        _opStack.Clear();
+                        // If still evaluating, there will be another update.
+                        if (_evaluating) {
+                            _watchForChoiceUpdate = true;
                         }
                     }
+                    
                 } else {
                     string varName = varAss.isGlobal ? aParentPath + " " + varAss.variableName : varAss.variableName;
-                    Console.WriteLine(_indent + "[VarAss] " + key + varName);
+
+                    // Global variable declarations.
                     if (key == "VAR=") {
+                        if (_opIdx == 1) {
+                            if (_opStack[_opIdx].IsEmpty()) {
+                                _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
+                                _opStack[_opIdx].AddTerm(_opStack[0]);
+                                _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
+                                _opStack.RemoveAt(0);
+                                _opIdx = 0;
+                            }
+                        // Op index is 0. Simple assignment.
+                        } else {
+                            _opStack[_opIdx].InjectVarLeft(varAss.variableName);
+                        }
+
                         Console.WriteLine(_indent + "[VarAss] " + key + varName);
+
                         _varToIdx.Add(varAss.variableName, _varIdx);
                         _varIdx++;
-                        _vars.Add(_tempVarVal);
-                        _tempVarVal = -999;
+                        _vars.Add(_opStack[0].RightVal);
+                        _passages[0].AddUpdate(_opStack[0]);
+
+                        _opIdx = 0;
+                        _opStack.Clear();
+                        _opStack.Add(new Operation());
                     }
+
+                    // if (key == "VAR=") {
+                    //     Console.WriteLine(_indent + "[VarAss] " + key + varName);
+                    //     _varToIdx.Add(varAss.variableName, _varIdx);
+                    //     _varIdx++;
+                    //     _vars.Add(_tempVarVal);
+                    //     _tempVarVal = -999;
+                    // }
                 }
                 return;
             }
@@ -1238,6 +1361,63 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + "[Choice] " + choice);
                 //WriteChoice(writer, choice);
                 return;
+            }
+        }
+
+        static void ProcessOperation(string aName) {
+            // This isn't the first operation required and second operations only has left term.
+            if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
+                // New operation is empty, must use previous operations.
+                if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
+                    _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                    _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                    _opStack[_opIdx].SetOpType(aName);
+                    _opStack.RemoveAt(_opIdx-1);
+                    _opStack.RemoveAt(_opIdx-2);
+                    _opIdx--;
+                    _opStack.Add(new Operation());
+                } else {
+                    if (_opIdx > 0) {
+                        if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], aName)) {
+                            throw new System.Exception ("Error setting operation type: " + aName);
+                        }
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opStack.Add(new Operation());
+                    }
+                }
+            // Right term is set.
+            } else {
+                // Two operations in a row, collapse the operations.
+                if (_opIdx > 0 && _opStack[_opIdx-1].RightType == Operation.OperandType.NotSet) {
+                    // This operation is complete.
+                    _opStack[_opIdx].SetOpType(aName);
+                    // Insert this operation into the previous.
+                    _opStack[_opIdx-1].RightType = Operation.OperandType.Op;
+                    _opStack[_opIdx-1].RightOp = _opStack[_opIdx];
+                    _opStack.RemoveAt(_opIdx);
+                    _opIdx--;
+                // Operation just needs the operand and it is ready.
+                } else {
+                    _opStack[_opIdx].SetOpType(aName);
+                    _opIdx++;
+                    _opStack.Add(new Operation());
+                }
+            }
+        }
+
+        static void ProcessFullOperation() {
+            Console.WriteLine("IS FULL: " + _opStack.Count);
+            _opStack.Add(new Operation());
+            _opIdx++;
+            _opStack[_opIdx].LeftType = _opStack[_opIdx-1].RightType;
+            _opStack[_opIdx].LeftVal = _opStack[_opIdx-1].RightVal;
+            _opStack[_opIdx].LeftOp = _opStack[_opIdx-1].RightOp;
+            _opStack[_opIdx].LeftName = _opStack[_opIdx-1].RightName;
+            _opStack[_opIdx-1].RightType = Operation.OperandType.NotSet;
+            _opStack[_opIdx-1].RightVal = 0;
+            _opStack[_opIdx-1].RightName = "";
+            for (int i = 0; i < _opStack.Count; i++) {
+                Console.WriteLine("1IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
             }
         }
 
@@ -1453,6 +1633,7 @@ namespace Ink.Runtime
         static List<Operation> _opStack = new List<Operation>();
         static UInt16 _opIdx = 0;
         static string _choiceOnlyContent;
+        static bool _watchForChoiceUpdate;
         static UInt16 _varIdx = 0;
         static int _newPsgDepth = 0;
         static Int16 _tempVarVal = -999;
@@ -1498,7 +1679,7 @@ namespace Ink.Runtime
             ChoiceCondition,
             ChoiceStartContent,
             ChoiceOnlyContent,
-            ChoiceOutputContent,
+            ChoiceContent,
             ChoiceUpdate,
             ChoiceLink,
             VarDeclarations
