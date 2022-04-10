@@ -1186,31 +1186,7 @@ namespace Ink.Runtime
                     }
                     
                     ProcessOperation(name);
-                    // if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
-                    //     // New operation is empty, must use previous operations.
-                    //     if (_opStack[_opIdx].LeftType == Operation.OperandType.NotSet) {
-                    //         _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
-                    //         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
-                    //         _opStack[_opIdx].SetOpType(name);
-                    //         _opStack.RemoveAt(_opIdx-1);
-                    //         _opStack.RemoveAt(_opIdx-2);
-                    //         _opIdx--;
-                    //         _opStack.Add(new Operation());
-                    //     } else {
-                    //         if (_opIdx > 0) {
-                    //             if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], name)) {
-                    //                 throw new System.Exception ("Error setting operation type: " + name);
-                    //             }
-                    //             _opStack.RemoveAt(_opIdx-1);
-                    //             _opStack.Add(new Operation());
-                    //         }
-                    //     }
-                    // // Right term is set.
-                    // } else {
-                    //     _opStack[_opIdx].SetOpType(name);
-                    //     _opIdx++;
-                    //     _opStack.Add(new Operation());
-                    // }
+
                     // DEBUG: Output every operation on the stack.
                     for (int i = 0; i < _opStack.Count; i++) {
                        Console.WriteLine("POST-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
@@ -1224,14 +1200,14 @@ namespace Ink.Runtime
             if (varRef) {
                 string readCountPath = varRef.pathStringForCount;
                 if (readCountPath != null) {
-                    Console.WriteLine(_indent + "[VarRef] CNT? " + varRef.path.ToString());
+                    Console.WriteLine(_indent + "[VarRef] CNT? " + varRef.pathForCount.ToString());
                     //writer.WriteProperty("CNT?", readCountPath);
                     if (_evaluating) {
                         if (_opStack[_opIdx].IsFull()) {
                             ProcessFullOperation();
                         }
 
-                        if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Visits, varRef.path.ToString())) {
+                        if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Visits, varRef.pathForCount.ToString())) {
                             throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
                         }
                     }
@@ -1322,14 +1298,6 @@ namespace Ink.Runtime
                         _opStack.Clear();
                         _opStack.Add(new Operation());
                     }
-
-                    // if (key == "VAR=") {
-                    //     Console.WriteLine(_indent + "[VarAss] " + key + varName);
-                    //     _varToIdx.Add(varAss.variableName, _varIdx);
-                    //     _varIdx++;
-                    //     _vars.Add(_tempVarVal);
-                    //     _tempVarVal = -999;
-                    // }
                 }
                 return;
             }
