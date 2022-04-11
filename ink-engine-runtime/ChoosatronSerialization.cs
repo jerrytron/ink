@@ -760,13 +760,6 @@ namespace Ink.Runtime
                             _psg.Name = namedContainer.path.ToString();
                             _state = State.NamedContent;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            // _state = State.None;
-                            // if (_psg != null) {
-                            //     Console.WriteLine(_indent + kIndent + "END OF PASSAGE - " + _psg.Name);
-                            //     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
-                            //     _passages.Add(_psg);
-                            //     _psg = null;
-                            // }
                         }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
@@ -780,6 +773,10 @@ namespace Ink.Runtime
                         }
                     } else if (_state == State.ChoiceStartContent) {
                         if (name == "s") {
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                        }
+                    } else if (_state == State.ChoiceUpdateCondition) {
+                        if (name == "b") {
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
                     }
@@ -849,8 +846,11 @@ namespace Ink.Runtime
                 }
 
                 if (divert.isConditional) {
-                    // TODO: Support passage conditional.
                     //writer.WriteProperty("c", true);
+                    if (_state == State.ChoiceUpdate) {
+                        Console.WriteLine("<Update w/ Conditional");
+                        _state = State.ChoiceUpdateCondition;
+                    }
                 }
 
                 // CDAM: Never to be supported (for external game-side function calls).
@@ -918,6 +918,9 @@ namespace Ink.Runtime
                 // PassageContent means no text was found yet but should have been.
                 if (_state == State.Passage || _state == State.PassageContent) {
                     Console.WriteLine("<START CHOICE");
+                    if (_choice == null) {
+                        _choice = new Choice();
+                    }
                     _choice.SetFlags(flags);
                     
                     if (_state == State.PassageContent) {
@@ -954,9 +957,7 @@ namespace Ink.Runtime
                 Console.WriteLine(_indent + "[Bool] " + boolVal.value);
                 //writer.Write(boolVal.value);
                 Int16 val = (boolVal.value ? (Int16)1 : (Int16)0);
-                // if (_state == State.VarDeclarations) {
-                //     _tempVarVal = val;
-                // }
+    
                 if (_evaluating) {
                     if (_opStack[_opIdx].IsFull()) {
                         ProcessFullOperation();
@@ -973,19 +974,9 @@ namespace Ink.Runtime
             if (intVal) {
                 Console.WriteLine(_indent + "[Int] " + intVal.value);
                 //writer.Write(intVal.value);
-                // if (_state == State.VarDeclarations) {
-                //     _tempVarVal = (Int16)intVal.value;
-                // }
                 if (_evaluating) {
                     if (_opStack[_opIdx].IsFull()) {
                         ProcessFullOperation();
-                        // _opStack.Add(new Operation());
-                        // _opIdx++;
-                        // _opStack[_opIdx].LeftType = _opStack[_opIdx-1].RightType;
-                        // _opStack[_opIdx].LeftVal = _opStack[_opIdx-1].RightVal;
-                        // _opStack[_opIdx].LeftOp = _opStack[_opIdx-1].RightOp;
-                        // _opStack[_opIdx].LeftName = _opStack[_opIdx-1].RightName;
-                        // _opStack[_opIdx-1].RightType = Operation.OperandType.Op;
                     }
 
                     if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Raw, (Int16)intVal.value)) {
@@ -1115,6 +1106,8 @@ namespace Ink.Runtime
                         _state = State.ChoiceUpdate;
                         _opStack.Add(new Operation());
                         Console.WriteLine("<Start Choice Update Eval>");
+                    } else if (_state == State.ChoiceUpdateCondition) {
+                        _evaluating = true;
                     } else if (_state == State.VarDeclarations) {
                         _evaluating = true;
                         _opStack.Add(new Operation());
@@ -1181,16 +1174,16 @@ namespace Ink.Runtime
                 
                 if (_evaluating) {
                     // DEBUG: Output every operation on the stack.
-                    for (int i = 0; i < _opStack.Count; i++) {
-                       Console.WriteLine("PRE-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
-                    }
+                    // for (int i = 0; i < _opStack.Count; i++) {
+                    //    Console.WriteLine("PRE-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                    // }
                     
                     ProcessOperation(name);
 
                     // DEBUG: Output every operation on the stack.
-                    for (int i = 0; i < _opStack.Count; i++) {
-                       Console.WriteLine("POST-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
-                    }
+                    // for (int i = 0; i < _opStack.Count; i++) {
+                    //    Console.WriteLine("POST-STACK: " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                    // }
                 }
                 return;
             }
@@ -1239,14 +1232,12 @@ namespace Ink.Runtime
                     Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
                     // Either Passage or Choice update.
                     // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
-                    if (_opIdx == 1) {
-                        if (_opStack[_opIdx].IsEmpty()) {
-                            _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
-                            _opStack[_opIdx].AddTerm(_opStack[0]);
-                            _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
-                            _opStack.RemoveAt(0);
-                            _opIdx = 0;
-                        }
+                    if (_opStack[_opIdx].IsEmpty()) {
+                        _opStack[_opIdx].AddTerm(Operation.OperandType.Var, varAss.variableName);
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                        _opStack[_opIdx].SetOpType(Operation.OperationType.Assign);
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opIdx--;
                     // Op index is 0. Simple assignment.
                     } else {
                         _opStack[_opIdx].InjectVarLeft(varAss.variableName);
@@ -1267,6 +1258,18 @@ namespace Ink.Runtime
                         if (_evaluating) {
                             _watchForChoiceUpdate = true;
                         }
+                    } else if (_state == State.ChoiceUpdateCondition) {
+                        // New operation to hold the conditional structure.
+                        _opStack.Add(new Operation());
+                        _opIdx++;
+
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                        _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
+                        _choice.AddUpdate(_opStack[_opIdx]);
+                        _state = State.ChoiceContent;
+                        _opStack.Clear();
+                        _opIdx = 0;
                     }
                     
                 } else {
@@ -1604,7 +1607,6 @@ namespace Ink.Runtime
         static bool _watchForChoiceUpdate;
         static UInt16 _varIdx = 0;
         static int _newPsgDepth = 0;
-        static Int16 _tempVarVal = -999;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<Passage> _passages = new List<Passage>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
@@ -1649,6 +1651,7 @@ namespace Ink.Runtime
             ChoiceOnlyContent,
             ChoiceContent,
             ChoiceUpdate,
+            ChoiceUpdateCondition,
             ChoiceLink,
             VarDeclarations
         };
