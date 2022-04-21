@@ -299,16 +299,16 @@ namespace Ink.Runtime
         /// <summary>
         /// The Story itself in Choosatron Classic representation.
         /// </summary>
-        public byte[] ToChoosatron()
+        public byte[] ToChoosatron(bool verbose = false)
         {
             var writer = new SimpleChoosatron.Writer();
-            ToChoosatron(writer);
+            ToChoosatron(writer, verbose);
             return writer.Stream.ToArray();
         }
 
-        void ToChoosatron(SimpleChoosatron.Writer writer)
+        void ToChoosatron(SimpleChoosatron.Writer writer, bool verbose = false)
         {
-            Choosatron.WriteBinary(writer, _mainContentContainer);
+            Choosatron.WriteBinary(writer, _mainContentContainer, verbose);
         }
             
         /// <summary>

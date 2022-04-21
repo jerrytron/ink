@@ -221,7 +221,7 @@ namespace Ink
             else if ( opts.choosatronOutput ) {
                 byte[] choosatronBin = {};
                 try {
-                    choosatronBin = story.ToChoosatron();
+                    choosatronBin = story.ToChoosatron(opts.verbose);
                 } catch (System.Exception e) {
                     Console.WriteLine ("Error creating choosatron binary: " + e.Message);
                     Environment.Exit (ExitCodeError);

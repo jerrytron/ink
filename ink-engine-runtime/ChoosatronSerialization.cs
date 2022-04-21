@@ -626,19 +626,21 @@ namespace Ink.Runtime
         }
 
 
-        public static void WriteBinary(SimpleChoosatron.Writer aWriter, Container aContainer) {
+        public static void WriteBinary(SimpleChoosatron.Writer aWriter, Container aContainer, bool aVerbose) {
+            _verbose = aVerbose;
+
             // Parse for all passage content.            
             ParseRuntimeContainer(aContainer);
 
-            if (_debugStory) { 
-                Console.WriteLine("------------");
+            if (_debug) Console.WriteLine("------------");
 
-                // DEBUG: Print passage aliases.
+            if (_verbose) { 
+                // Print passage aliases.
                 foreach (var map in _psgAliases) {
                     Console.WriteLine(map.Key + ": " + map.Value);
                 }
 
-                // DEBUG: Print passages as strings.
+                // Print passages as strings.
                 foreach (Passage p in _passages) {
                     Console.Write(p.ToString("    "));
                 }
@@ -1596,8 +1598,8 @@ namespace Ink.Runtime
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static bool _debug = false;
-        static bool _debugStory = true;
+        static bool _debug = false; // Print all the crazy console writes.
+        static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;
         static State _state = State.None;
