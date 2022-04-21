@@ -301,7 +301,6 @@ namespace Ink.Runtime
         /// </summary>
         public byte[] ToChoosatron()
         {
-            Console.WriteLine("ToChoosatron\n");
             var writer = new SimpleChoosatron.Writer();
             ToChoosatron(writer);
             return writer.Stream.ToArray();

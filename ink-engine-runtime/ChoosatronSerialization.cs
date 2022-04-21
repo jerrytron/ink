@@ -194,7 +194,7 @@ namespace Ink.Runtime
                 set {
                     _isInvisibleDefault = value;
                     _attributes = Bits.SetBit(_attributes, 0, value);
-                    Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
+                    if (_debug) Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
                 }
             }
             private bool _onceOnly;
@@ -203,7 +203,7 @@ namespace Ink.Runtime
                 set {
                     _onceOnly = value;
                     _attributes = Bits.SetBit(_attributes, 1, value);
-                    Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
+                    if (_debug) Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
                 }    
             }
 
@@ -215,13 +215,12 @@ namespace Ink.Runtime
                 HasChoiceOnlyContent = Bits.IsBitSetTo1(aFlags, 2);
                 IsInvisibleDefault = Bits.IsBitSetTo1(aFlags, 3);
                 OnceOnly = Bits.IsBitSetTo1(aFlags, 4);
-                Console.WriteLine(HasCondition ? "f:condition" : "f:no condition");
-                Console.WriteLine(HasStartContent ? "f:start text" : "f:no start text");
-                Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
-                Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
-                Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
-
-                Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
+                if (_debug) Console.WriteLine(HasCondition ? "f:condition" : "f:no condition");
+                if (_debug) Console.WriteLine(HasStartContent ? "f:start text" : "f:no start text");
+                if (_debug) Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
+                if (_debug) Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
+                if (_debug) Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
+                if (_debug) Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
             }
 
             public void AddCondition(Operation aCondition) {
@@ -631,27 +630,29 @@ namespace Ink.Runtime
             // Parse for all passage content.            
             ParseRuntimeContainer(aContainer);
 
-            Console.WriteLine("------------");
+            if (_debugStory) { 
+                Console.WriteLine("------------");
 
-            // DEBUG: Print passage aliases.
-            foreach (var map in _psgAliases) {
-                Console.WriteLine(map.Key + ": " + map.Value);
-            }
+                // DEBUG: Print passage aliases.
+                foreach (var map in _psgAliases) {
+                    Console.WriteLine(map.Key + ": " + map.Value);
+                }
 
-            // DEBUG: Print passages as strings.
-            foreach (Passage p in _passages) {
-                Console.Write(p.ToString("    "));
-            }
+                // DEBUG: Print passages as strings.
+                foreach (Passage p in _passages) {
+                    Console.Write(p.ToString("    "));
+                }
 
-            Console.WriteLine("Total Passages: " + _passages.Count);
+                Console.WriteLine("Total Passages: " + _passages.Count);
 
 
-            if (_varToIdx.Count >= 1) {
-                Console.WriteLine("Variable Declarations");
-            }
-            Console.WriteLine("Var Count: " + _vars.Count);
-            foreach (var map in _varToIdx) {
-                Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
+                if (_varToIdx.Count >= 1) {
+                    Console.WriteLine("Variable Declarations");
+                }
+                Console.WriteLine("Var Count: " + _vars.Count);
+                foreach (var map in _varToIdx) {
+                    Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
+                }
             }
 
             // Update choice links to match passage indexes.
@@ -714,7 +715,7 @@ namespace Ink.Runtime
             if ((_newPsgDepth + 1 == _dataDepth) && _state == State.Passage) {
                 _state = State.None;
                 if (_psg != null) {
-                    Console.WriteLine("<END OF PASSAGE: " + _psg.Name);
+                    if (_debug) Console.WriteLine("<END OF PASSAGE: " + _psg.Name);
                     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
                     _passages.Add(_psg);
                     _newPsgDepth = 0;
@@ -734,7 +735,7 @@ namespace Ink.Runtime
             bool hasTerminator = namedOnlyContent != null || countFlags > 0 || hasNameProperty;
 
             if (hasTerminator) {
-                Console.WriteLine("Has Terminator");
+                if (_debug) Console.WriteLine("Has Terminator");
                 //writer.WriteObjectStart();
             }
 
@@ -742,7 +743,7 @@ namespace Ink.Runtime
                 foreach (var namedContent in namedOnlyContent) {
                     var name = namedContent.Key;
                     var namedContainer = namedContent.Value as Container;
-                    Console.WriteLine(_indent + "[Named] " + name + ": " + namedContainer.path + " <State: " + _state + ">");
+                    if (_debug) Console.WriteLine(_indent + "[Named] " + name + ": " + namedContainer.path + " <State: " + _state + ">");
 
                     // If 'None' we are just starting to look for the beginning of a new passage.
                     if (_state == State.None) {
@@ -753,7 +754,7 @@ namespace Ink.Runtime
                         } else {
                             // Could be a knot/stitch w/ content (like a Choosatron Passage) or
                             // could be a knot diverting to its first stitch. If first element is string, it is a passage.
-                            Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
+                            if (_debug) Console.WriteLine("<START PSG: " + namedContainer.path.ToString());
                             // Depth in data structure where we are starting a new passage.
                             _newPsgDepth = _dataDepth;
                             _psg = new Passage();
@@ -765,10 +766,10 @@ namespace Ink.Runtime
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceContent;
                             int choiceIdx = int.Parse(name.Split('-')[1]);
-                            Console.WriteLine(_indent + kIndent + "<Choice Idx: " + choiceIdx);
+                            if (_debug) Console.WriteLine(_indent + kIndent + "<Choice Idx: " + choiceIdx);
                             _choice = _psg.GetChoice(choiceIdx);
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            Console.WriteLine(_indent + kIndent + "<Choice End Idx: " + choiceIdx);
+                            if (_debug) Console.WriteLine(_indent + kIndent + "<Choice End Idx: " + choiceIdx);
                             _choice = null;
                         }
                     } else if (_state == State.ChoiceStartContent) {
@@ -785,19 +786,19 @@ namespace Ink.Runtime
 
             if (countFlags > 0) {
                 string flags = Bits.GetBinaryString((byte)countFlags);
-                Console.WriteLine(_indent + "#Count Flags: " + countFlags + " '" + flags + "'");
+                if (_debug) Console.WriteLine(_indent + "#Count Flags: " + countFlags + " '" + flags + "'");
                 //writer.WriteProperty("#f", countFlags);
             }
 
             if (hasNameProperty) {
-                Console.WriteLine(_indent + "#Name: " + aContainer.name);
+                if (_debug) Console.WriteLine(_indent + "#Name: " + aContainer.name);
                 //writer.WriteProperty("#n", container.name);
             }
 
             if (hasTerminator) {
                 //writer.WriteObjectEnd();
             } else {
-                Console.WriteLine(_indent + "<null>");
+                if (_debug) Console.WriteLine(_indent + "<null>");
                 //writer.WriteNull();
             }
 
@@ -808,7 +809,7 @@ namespace Ink.Runtime
         static void ParseRuntimeObject(Runtime.Object aObj, string aParentPath) {
             var container = aObj as Container;
             if (container) {
-                Console.WriteLine(_indent + "[Container] " + container.name);
+                if (_debug) Console.WriteLine(_indent + "[Container] " + container.name);
                 //_indent += kIndent;
                 ParseRuntimeContainer(container);
                 //_indent = _indent.Remove(_indent.Length - kIndent.Length);
@@ -848,7 +849,7 @@ namespace Ink.Runtime
                 if (divert.isConditional) {
                     //writer.WriteProperty("c", true);
                     if (_state == State.ChoiceUpdate) {
-                        Console.WriteLine("<Update w/ Conditional");
+                        if (_debug) Console.WriteLine("<Update w/ Conditional");
                         _state = State.ChoiceUpdateCondition;
                     }
                 }
@@ -865,7 +866,7 @@ namespace Ink.Runtime
 
                 // This isn't a passage, but a forward to a passage.
                 if (_state == State.NamedContent) {
-                    Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
+                    if (_debug) Console.WriteLine(_indent + "[Divert] " + aParentPath + "->" + divert.targetPath.componentsString);
                     _state = State.None;
                     _psgAliases.Add(aParentPath, divert.targetPath.componentsString);
                     _newPsgDepth = 0;
@@ -876,20 +877,20 @@ namespace Ink.Runtime
                         string error = "Either missing glue '<>' at the end of passage '"
                          + _psg.Name + "' content if using a divert directly after, or missing a choice command just before the divert ('*' or '+').";
                         // throw new System.Exception(error);
-                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior.");
+                        if (_debug) Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior.");
                     }
                     Choice c = new Choice();
                     c.PsgLink = divert.targetPath.componentsString;
                     c.IsInvisibleDefault = true;
                     _psg.SetAppendFlag(true);
-                    Console.WriteLine("<PUSH APPEND CHOICE");
+                    if (_debug) Console.WriteLine("<PUSH APPEND CHOICE");
                     _psg.AddChoice(c);
                     _state = State.Passage;
                 } else if (_state == State.ChoiceContent) {
                     if (!targetStr.StartsWith(".^")) {
                         // In case it was a newline prior to divert.
                         _watchForChoiceUpdate = false;
-                        Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
+                        if (_debug) Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
                         _choice.PsgLink = divert.targetPath.componentsString;
                         if (!_choice.IsInvisibleDefault) {
                             if (_choice.GetChoiceText() != "") {
@@ -897,12 +898,12 @@ namespace Ink.Runtime
                             } else {
                                 _choice.Body = _choice.GetOutputText();
                             }
-                            Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.Body);
+                            if (_debug) Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.Body);
                         }
                         _state = State.Passage;
                     } // There is an extra default 
                 } else {
-                    Console.WriteLine(_indent + "[Divert] " + divTypeKey + " " + targetStr);
+                    if (_debug) Console.WriteLine(_indent + "[Divert] " + divTypeKey + " " + targetStr);
                 }
 
                 return;
@@ -910,14 +911,14 @@ namespace Ink.Runtime
 
             var choicePoint = aObj as ChoicePoint;
             if (choicePoint) {
-                Console.WriteLine(_indent + "[ChoicePoint] * | " + choicePoint.pathStringOnChoice);
+                if (_debug) Console.WriteLine(_indent + "[ChoicePoint] * | " + choicePoint.pathStringOnChoice);
                 byte flags = (byte)choicePoint.flags;
-                Console.WriteLine(_indent + kIndent + "^ Flags: " + choicePoint.flags.ToString() + " '" + Bits.GetBinaryString(flags) + "'");
+                if (_debug) Console.WriteLine(_indent + kIndent + "^ Flags: " + choicePoint.flags.ToString() + " '" + Bits.GetBinaryString(flags) + "'");
 
                 // Must be building a passage.
                 // PassageContent means no text was found yet but should have been.
                 if (_state == State.Passage || _state == State.PassageContent) {
-                    Console.WriteLine("<START CHOICE");
+                    if (_debug) Console.WriteLine("<START CHOICE");
                     if (_choice == null) {
                         _choice = new Choice();
                     }
@@ -926,7 +927,7 @@ namespace Ink.Runtime
                     if (_state == State.PassageContent) {
                         string error = "Choice in passage '" + _psg.Name + "' is missing any content. Either add content or remove choice command ('*' or '+') and add glue to passage content (add '<>' to end of passage text).";
                         // throw new System.Exception(error);
-                        Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior unless there are more choices after.");
+                        if (_debug) Console.WriteLine("[WARNING] " + error + " Defaulting to 'append' behavior unless there are more choices after.");
                     }
                     
                     if (_choice.HasChoiceOnlyContent) {
@@ -937,9 +938,9 @@ namespace Ink.Runtime
                     }
                     if (_choice.HasStartContent) {
                         _state = State.ChoiceStartContent;
-                        Console.WriteLine("<S:CHOICE START CONTENT");
+                        if (_debug) Console.WriteLine("<S:CHOICE START CONTENT");
                     } else {
-                        Console.WriteLine("<PUSH CHOICE");
+                        if (_debug) Console.WriteLine("<PUSH CHOICE");
                         // Add the unfinished choice to the list and back to passage state.
                         // The next choice might have choice only text.
                         _psg.AddChoice(_choice);
@@ -954,7 +955,7 @@ namespace Ink.Runtime
 
             var boolVal = aObj as BoolValue;
             if (boolVal) {
-                Console.WriteLine(_indent + "[Bool] " + boolVal.value);
+                if (_debug) Console.WriteLine(_indent + "[Bool] " + boolVal.value);
                 //writer.Write(boolVal.value);
                 Int16 val = (boolVal.value ? (Int16)1 : (Int16)0);
     
@@ -972,7 +973,7 @@ namespace Ink.Runtime
 
             var intVal = aObj as IntValue;
             if (intVal) {
-                Console.WriteLine(_indent + "[Int] " + intVal.value);
+                if (_debug) Console.WriteLine(_indent + "[Int] " + intVal.value);
                 //writer.Write(intVal.value);
                 if (_evaluating) {
                     if (_opStack[_opIdx].IsFull()) {
@@ -983,7 +984,7 @@ namespace Ink.Runtime
                         throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
                     }
                     for (int i = 0; i < _opStack.Count; i++) {
-                       Console.WriteLine("Global Var: " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                       if (_debug) Console.WriteLine("Global Var: " + i + ", CURRENT OP: " + _opStack[i].ToString());
                     }
                 }
                 return;
@@ -991,7 +992,7 @@ namespace Ink.Runtime
 
             var floatVal = aObj as FloatValue;
             if (floatVal) {
-                Console.WriteLine(_indent + "[Float] " + floatVal.value);
+                if (_debug) Console.WriteLine(_indent + "[Float] " + floatVal.value);
                 //writer.Write(floatVal.value);
                 throw new System.Exception("Choosatron doesn't support float values at this time.");
             }
@@ -999,7 +1000,7 @@ namespace Ink.Runtime
             var strVal = aObj as StringValue;
             if (strVal) {
                 if (strVal.isNewline) {
-                    Console.WriteLine(_indent + "^ Newline");
+                    if (_debug) Console.WriteLine(_indent + "^ Newline");
                     if (_state == State.PassageContent) {
                         _psg.Body += "\n";
                     } else if (_state == State.ChoiceContent) {
@@ -1009,29 +1010,29 @@ namespace Ink.Runtime
                 } else {
                     // Is this a passage?
                     if (_state == State.NamedContent || _state == State.PassageContent) {
-                        Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
+                        if (_debug) Console.WriteLine(_indent + "[String] Psg Body: " + strVal.value);
                         // We know we are in a passage (knot/stitch).
                         _psg.Body += strVal.value;
                         _state = State.PassageContent;
                     } else if (_state == State.ChoiceStartContent) {
                         _choice.StartContent = strVal.value;
-                        Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
+                        if (_debug) Console.WriteLine(_indent + "[String] Choice Start Text: " + strVal.value);
 
                         // Add the unfinished choice to the list and back to passage state.
                         // The next choice might have choice only text.
-                        Console.WriteLine("<PUSH START TEXT CHOICE");
+                        if (_debug) Console.WriteLine("<PUSH START TEXT CHOICE");
                         _psg.AddChoice(_choice);
                         _choice = null;
                         _state = State.Passage;
                     } else if (_state == State.Passage) {
-                        Console.WriteLine(_indent + "[String] Maybe Choice Only Text: " + strVal.value);
+                        if (_debug) Console.WriteLine(_indent + "[String] Maybe Choice Only Text: " + strVal.value);
                         _choiceOnlyContent = strVal.value;
                     } else if (_state == State.ChoiceContent) {
-                        Console.WriteLine(_indent + "[String] Output Text: " + strVal.value);
+                        if (_debug) Console.WriteLine(_indent + "[String] Output Text: " + strVal.value);
                         _choice.OutputContent = strVal.value;
-                        Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetOutputText());
+                        if (_debug) Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.GetOutputText());
                     } else {
-                        Console.WriteLine(_indent + "[String] UNHANDLED: " + strVal.value + " S:" + _state);
+                        if (_debug) Console.WriteLine(_indent + "[String] UNHANDLED: " + strVal.value + " S:" + _state);
                     }
                 }
                 return;
@@ -1039,7 +1040,7 @@ namespace Ink.Runtime
 
             var listVal = aObj as ListValue;
             if (listVal) {
-                Console.WriteLine(_indent + "[ListVal]");
+                if (_debug) Console.WriteLine(_indent + "[ListVal]");
                 //WriteInkList(writer, listVal);
                 _indent += kIndent;
                 
@@ -1048,14 +1049,14 @@ namespace Ink.Runtime
                     var item = itemAndValue.Key;
                     int itemVal = itemAndValue.Value;
 
-                    Console.WriteLine(_indent + (item.originName ?? "?") + "." + item.itemName +": " + itemVal);
+                    if (_debug) Console.WriteLine(_indent + (item.originName ?? "?") + "." + item.itemName +": " + itemVal);
                 }
                 
                 if (rawList.Count == 0 && rawList.originNames != null && rawList.originNames.Count > 0) {
-                    Console.WriteLine(_indent + "origins:");
+                    if (_debug) Console.WriteLine(_indent + "origins:");
                     _indent += kIndent;
                     foreach (var name in rawList.originNames) {
-                        Console.WriteLine(_indent + name);
+                        if (_debug) Console.WriteLine(_indent + name);
                     }
                     _indent = _indent.Remove(_indent.Length - kIndent.Length);
                 }
@@ -1066,19 +1067,19 @@ namespace Ink.Runtime
 
             var divTargetVal = aObj as DivertTargetValue;
             if (divTargetVal) {
-                Console.WriteLine(_indent + "[DivTargetVal] ^->" + divTargetVal.value.componentsString);
+                if (_debug) Console.WriteLine(_indent + "[DivTargetVal] ^->" + divTargetVal.value.componentsString);
                 return;
             }
 
             var varPtrVal = aObj as VariablePointerValue;
             if (varPtrVal) {
-                Console.WriteLine(_indent + "[VarPtrVal] ^var " + varPtrVal.value + ", ci " + varPtrVal.contextIndex);
+                if (_debug) Console.WriteLine(_indent + "[VarPtrVal] ^var " + varPtrVal.value + ", ci " + varPtrVal.contextIndex);
                 return;
             }
 
             var glue = aObj as Runtime.Glue;
             if (glue) {
-                Console.WriteLine(_indent + "[Glue] <>");
+                if (_debug) Console.WriteLine(_indent + "[Glue] <>");
                 if (_state == State.PassageContent) {
                     _state = State.GluePassage;
                 }
@@ -1088,7 +1089,7 @@ namespace Ink.Runtime
 
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
-                Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
+                if (_debug) Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
 
                 if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
                     
@@ -1097,7 +1098,7 @@ namespace Ink.Runtime
                         _evaluating = true;
                         _state = State.PassageUpdate;
                         _opStack.Add(new Operation());
-                        Console.WriteLine("<Start Psg Update Eval>");
+                        if (_debug) Console.WriteLine("<Start Psg Update Eval>");
                     } else if (_state == State.PassageContent) {
                         _state = State.Passage;
                     } else if (_state == State.ChoiceContent && _watchForChoiceUpdate) {
@@ -1105,13 +1106,13 @@ namespace Ink.Runtime
                         _watchForChoiceUpdate = false;
                         _state = State.ChoiceUpdate;
                         _opStack.Add(new Operation());
-                        Console.WriteLine("<Start Choice Update Eval>");
+                        if (_debug) Console.WriteLine("<Start Choice Update Eval>");
                     } else if (_state == State.ChoiceUpdateCondition) {
                         _evaluating = true;
                     } else if (_state == State.VarDeclarations) {
                         _evaluating = true;
                         _opStack.Add(new Operation());
-                        Console.WriteLine("<Start Var Decl Eval>");
+                        if (_debug) Console.WriteLine("<Start Var Decl Eval>");
                     }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.EvalEnd) {
                     _evaluating = false;
@@ -1121,11 +1122,11 @@ namespace Ink.Runtime
                         _opIdx = 0;
                         
                         if (_opStack.Count == 1) {
-                            Console.WriteLine("<End Choice Condition Eval: " + _opStack[0].ToString());
+                            if (_debug) Console.WriteLine("<End Choice Condition Eval: " + _opStack[0].ToString());
                             _choice.AddCondition(_opStack[0]);
                             _opStack.Clear();
                         } else {
-                            Console.WriteLine("<End Choice Condition Eval>");
+                            if (_debug) Console.WriteLine("<End Choice Condition Eval>");
                         }
                         _state = State.Passage;
                     } else if (_state == State.VarDeclarations) {
@@ -1144,7 +1145,7 @@ namespace Ink.Runtime
                     if (_state == State.Passage) {
                         _evaluating = true;
                         _choice = new Choice();
-                        Console.WriteLine("<Start Choice Condition Eval>");
+                        if (_debug) Console.WriteLine("<Start Choice Condition Eval>");
                         _opStack.Add(new Operation());
                         _state = State.ChoiceCondition;
                     }
@@ -1169,7 +1170,7 @@ namespace Ink.Runtime
                 if (name == "^") {
                     name = "L^";
                 }
-                Console.WriteLine(_indent + "[Function] " + name);
+                if (_debug) Console.WriteLine(_indent + "[Function] " + name);
                 //writer.Write(name);
                 
                 if (_evaluating) {
@@ -1193,7 +1194,7 @@ namespace Ink.Runtime
             if (varRef) {
                 string readCountPath = varRef.pathStringForCount;
                 if (readCountPath != null) {
-                    Console.WriteLine(_indent + "[VarRef] CNT? " + varRef.pathForCount.ToString());
+                    if (_debug) Console.WriteLine(_indent + "[VarRef] CNT? " + varRef.pathForCount.ToString());
                     //writer.WriteProperty("CNT?", readCountPath);
                     if (_evaluating) {
                         if (_opStack[_opIdx].IsFull()) {
@@ -1205,7 +1206,7 @@ namespace Ink.Runtime
                         }
                     }
                 } else {
-                    Console.WriteLine(_indent + "[VarRef] VAR? " + varRef.name);
+                    if (_debug) Console.WriteLine(_indent + "[VarRef] VAR? " + varRef.name);
                     //writer.WriteProperty("VAR?", varRef.name);
                     if (_evaluating) {
                         if (_opStack[_opIdx].IsFull()) {
@@ -1229,7 +1230,7 @@ namespace Ink.Runtime
                 // Reassignment?
                 if (!varAss.isNewDeclaration) {
                     //writer.WriteProperty("re", true);
-                    Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
+                    if (_debug) Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
                     // Either Passage or Choice update.
                     // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
                     if (_opStack[_opIdx].IsEmpty()) {
@@ -1244,13 +1245,13 @@ namespace Ink.Runtime
                     }
 
                     if (_state == State.PassageUpdate) {
-                        Console.WriteLine("<End Psg Update Eval: " + _opStack[0].ToString());
+                        if (_debug) Console.WriteLine("<End Psg Update Eval: " + _opStack[0].ToString());
                         _psg.AddUpdate(_opStack[0]);
                         _state = State.NamedContent;
                         _opStack.Clear();
                         // _evaluating = false;
                     } else if (_state == State.ChoiceUpdate) {
-                        Console.WriteLine("<End Choice Update Eval: " + _opStack[0].ToString());
+                        if (_debug) Console.WriteLine("<End Choice Update Eval: " + _opStack[0].ToString());
                         _choice.AddUpdate(_opStack[0]);
                         _state = State.ChoiceContent;
                         _opStack.Clear();
@@ -1290,7 +1291,7 @@ namespace Ink.Runtime
                             _opStack[_opIdx].InjectVarLeft(varAss.variableName);
                         }
 
-                        Console.WriteLine(_indent + "[VarAss] " + key + varName);
+                        if (_debug) Console.WriteLine(_indent + "[VarAss] " + key + varName);
 
                         _varToIdx.Add(varAss.variableName, _varIdx);
                         _varIdx++;
@@ -1308,7 +1309,7 @@ namespace Ink.Runtime
             // Void
             var voidObj = aObj as Void;
             if (voidObj) {
-                Console.WriteLine(_indent + "[Void]");
+                if (_debug) Console.WriteLine(_indent + "[Void]");
                 //writer.Write("void");
                 return;
             }
@@ -1316,7 +1317,7 @@ namespace Ink.Runtime
             // Tag
             var tag = aObj as Tag;
             if (tag) {
-                Console.WriteLine(_indent + "[Tag] " + tag.text);
+                if (_debug) Console.WriteLine(_indent + "[Tag] " + tag.text);
                 if (_state == State.Passage) {
                     if (tag.text.StartsWith("eq")) {
                         _psg.SetEnding(tag.text);
@@ -1329,7 +1330,7 @@ namespace Ink.Runtime
             // Used when serialising save state only
             var choice = aObj as Ink.Runtime.Choice;
             if (choice) {
-                Console.WriteLine(_indent + "[Choice] " + choice);
+                if (_debug) Console.WriteLine(_indent + "[Choice] " + choice);
                 //WriteChoice(writer, choice);
                 return;
             }
@@ -1377,7 +1378,7 @@ namespace Ink.Runtime
         }
 
         static void ProcessFullOperation() {
-            Console.WriteLine("IS FULL: " + _opStack.Count);
+            if (_debug) Console.WriteLine("IS FULL: " + _opStack.Count);
             _opStack.Add(new Operation());
             _opIdx++;
             _opStack[_opIdx].LeftType = _opStack[_opIdx-1].RightType;
@@ -1388,7 +1389,7 @@ namespace Ink.Runtime
             _opStack[_opIdx-1].RightVal = 0;
             _opStack[_opIdx-1].RightName = "";
             for (int i = 0; i < _opStack.Count; i++) {
-                Console.WriteLine("1IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                if (_debug) Console.WriteLine("1IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
             }
         }
 
@@ -1416,7 +1417,7 @@ namespace Ink.Runtime
                     }
                 } else {
                     var divert = obj as Divert;
-                    Console.WriteLine("Done with Tags");
+                    if (_debug) Console.WriteLine("Done with Tags");
                     break;
                 }
             }
@@ -1461,11 +1462,11 @@ namespace Ink.Runtime
             // TODO: Set flags as tags.
             byte f = 0;
             f = Bits.SetBit(f, 4, true);
-            Console.WriteLine("Flag 1: " + Bits.GetBinaryString(f));
+            if (_debug) Console.WriteLine("Flag 1: " + Bits.GetBinaryString(f));
             writer.Write(f);
             f = 0;
             f = Bits.SetBit(f, 7, true);
-            Console.WriteLine("Flag 2: " + Bits.GetBinaryString(f));
+            if (_debug) Console.WriteLine("Flag 2: " + Bits.GetBinaryString(f));
             writer.Write(f);
             f = 0;
             writer.Write(f);
@@ -1545,7 +1546,7 @@ namespace Ink.Runtime
             //DateTimeOffset dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
             published = dto.ToUnixTimeSeconds();
             writer.Write((UInt32)published);
-            Console.WriteLine("Publish Time in Unix Epoch Seconds: " + published);
+            if (_debug) Console.WriteLine("Publish Time in Unix Epoch Seconds: " + published);
              
             // Variable Count - 2 bytes - Location 412 / 0x019C
             writer.Write(aVarCount);
@@ -1592,9 +1593,11 @@ namespace Ink.Runtime
             }
             string ifidStr = ifid.ToString("D").ToUpper();
             aWriter.Write(Encoding.ASCII.GetBytes(ifidStr));
-            Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
+            if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
+        static bool _debug = false;
+        static bool _debugStory = true;
         static string _indent = "";
         static int _dataDepth = 0;
         static State _state = State.None;
