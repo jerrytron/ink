@@ -355,6 +355,7 @@ namespace Ink.Runtime
                 Not, // Returns 0 or 1 - if val not 0, returns 0, if val is 0, returns 1
                 Min, // Returns int16_t - the smaller of the two numbers
                 Max, // Returns int16_t - the larger of the two numbers
+                Pow, // Returns int16_t - val a to the power of val b
                 // ----
                 TOTAL_OPS
             }
@@ -585,6 +586,7 @@ namespace Ink.Runtime
                 _operationNames [(int)OperationType.Not] = "!";
                 _operationNames [(int)OperationType.Min] = "MIN";
                 _operationNames [(int)OperationType.Max] = "MAX";
+                _operationNames [(int)OperationType.Pow] = "POW";
 
                 for (int i = 0; i < (int)OperationType.TOTAL_OPS; ++i) {
                     if (_operationNames [i] == null) {
@@ -621,7 +623,8 @@ namespace Ink.Runtime
                 { NativeFunctionCall.Negate, OperationType.Negate },
                 { NativeFunctionCall.Not, OperationType.Not },
                 { NativeFunctionCall.Min, OperationType.Min },
-                { NativeFunctionCall.Max, OperationType.Max }
+                { NativeFunctionCall.Max, OperationType.Max },
+                { NativeFunctionCall.Pow, OperationType.Pow }
             };
         }
 
@@ -1413,6 +1416,7 @@ namespace Ink.Runtime
                 if (tag) {
                     string[] parts = tag.text.Split( ':' );
                     if (parts.Length == 2) {
+                        parts[0] = parts[0].Trim();
                         parts[1] = parts[1].Trim();
                         // Console.WriteLine( parts[0] + "-" + parts[1]);
                         tags.Add( parts[0], parts[1]);
@@ -1594,6 +1598,7 @@ namespace Ink.Runtime
                 }
             }
             string ifidStr = ifid.ToString("D").ToUpper();
+            //string emptyIfid = "00000000-0000-0000-0000-000000000000";
             aWriter.Write(Encoding.ASCII.GetBytes(ifidStr));
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
