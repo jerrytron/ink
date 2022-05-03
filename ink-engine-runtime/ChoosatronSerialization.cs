@@ -1261,9 +1261,9 @@ namespace Ink.Runtime
                         _state = State.ChoiceContent;
                         _opStack.Clear();
                         // If still evaluating, there will be another update.
-                        if (_evaluating) {
+                        // if (_evaluating) {
                             _watchForChoiceUpdate = true;
-                        }
+                        // }
                     } else if (_state == State.ChoiceUpdateCondition) {
                         // New operation to hold the conditional structure.
                         _opStack.Add(new Operation());
