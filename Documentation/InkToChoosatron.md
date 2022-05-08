@@ -42,22 +42,22 @@ Ink reserves the name **END** for indicating that your story should end. Instead
 
 If you are reading this from the Ink repository _Documentation_ folder, go ahead and navigate to [Releases](https://github.com/jerrytron/ink/releases) and download the latest. This file will also be present in the release zip file along with an examples directory that contains the same Ink stories that are in the _InkChoosatronStories_ folder in the repository. Uncompress the release and navigate to the resulting folder in a command-line.
 
-Inside the release folder is a copy of this document, the compiler `inklecate` and related DLLs, and an _examples_ folder. The compiler filename will differ slightly depending on your operating system (ex: `inklecate_mac` for MacOS). For this example we will reference the `revolver.ink` story from the _examples_ folder. The example will also assume you are on MacOS, but simply change the compiler name to match your OS (`inklecate_win` or `inklecate_linux`).
+Inside the release folder is a copy of this document, the compiler `inklecate` and related DLLs, and an _examples_ folder.
 
-This is thestructure of the Choosatron compilation command:
-`./inklecate_mac -o <story.dam> -d <story.ink>`
+This is the structure of the Choosatron compilation command:
+`./inklecate -o <story.dam> -d <story.ink>`
 
-The `-o` is the output path and filename. Stories for the Choosatron have the extension `dam`. Without it the Choosatron will ignore them. The `-d` argument indicates that you wish to compile to the Choosatron story format and is once again provided a path and filename. For instance, if you provided `-j` instead, it would output Ink's JSON format. You can simply execute the compiler with no arguments for help output.
+The `-o` is the output path and filename. Stories for the Choosatron have the extension `dam`. Without it the Choosatron will ignore them. The `-d` argument indicates that you wish to compile to the Choosatron story format and is once again provided a path and filename. For instance, if you provided `-j` instead, it would output Ink's JSON format. You can simply execute the compiler with no arguments for help output. For this example we will reference the `revolver.ink` story from the _examples_ folder. 
 
 This will compile the revolver story to the same folder as the compiler.
-`./inklecate_mac -o revolver.dam -d examples/revolver.ink`
+`./inklecate -o revolver.dam -d examples/revolver.ink`
 
 If we wanted to output the file into a folder called `output` it would be the following (you must create the folder first).
-`./inklecate_mac -o output/revolver.dam -d examples/revolver.ink`
+`./inklecate -o output/revolver.dam -d examples/revolver.ink`
 
 If you want verbose output which will print out the parsed story structure you can add the `-v` argument.
 
-`./inklecate_mac -v -o revolver.dam -d examples/revolver.ink`
+`./inklecate -v -o revolver.dam -d examples/revolver.ink`
 
 ## What You Can't Do
 
