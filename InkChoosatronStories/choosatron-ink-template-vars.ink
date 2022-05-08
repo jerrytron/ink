@@ -51,12 +51,12 @@ VAR spinning_right = false
     -> test_append_two
 
 = test_append_two
-    If you are playing this story, you won't even realize the first append even happened. It's happening again.
-    + -> test_append_three
+    If you are playing this story, you won't even realize the first append even happened. This append is a keyword for how Choosatron stories used to be written, so it is still supported.
+    + <append> -> test_append_three
 
 = test_append_three
-    Could you tell? This final append was a keyword for how Choosatron stories used to be written, so it is still supported. Forgot about this stuff. Haven't you wondered where you are in this story?
-    + <append> -> a_little_game
+    Could you tell? This final append example works but the previous two methods are preferred. This one happens automatically if you only have one choice and no choice content. Forgot about this stuff. Haven't you wondered where you are in this story?
+    + -> a_little_game
 
 === a_little_game
 
@@ -78,7 +78,8 @@ VAR spinning_right = false
     }
     The world blurs and the sensation makes you tingle!
     // By tracking the direction the choice content can be more contextual.
-    + { (not spinning_right) and (chair_speed > 0) } Give another kick spinning left!
+    + { (spinning_right == false) and (chair_speed > 0) } Give another kick spinning left!
+    // + { (not spinning_right) and (chair_speed > 0) } Give another kick spinning left!
         -> spin_faster
     + { spinning_right and (chair_speed > 0) } Give another kick spinning right!
         -> spin_faster
@@ -101,8 +102,8 @@ VAR spinning_right = false
     ~ chair_speed += SPEED_BOOST
     Wooo you spin and spin and spin!!!
     // If you spin too fast you'll get sick!
-    + { chair_speed >= MAX_SPEED } -> too_fast
-    + { chair_speed < MAX_SPEED } -> spin_again
+    + { chair_speed >= MAX_SPEED } <continue> -> too_fast
+    + { chair_speed < MAX_SPEED } <continue> -> spin_again
 
 = too_fast
     The world around you is a blur, the rare points of color in the cubicle stretch until they seem to surround you. For a moment it is incredible, but then you realize something is wrong. Even as the chair slows a small amount the fluid in your head doesn't keep pace and you are overcome with nausea. You reach out your limbs to catch whatever you can, coming to an abrupt, clumsey stop. You barely make it to the trashcan before your lose your lunch!

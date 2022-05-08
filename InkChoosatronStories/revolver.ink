@@ -90,7 +90,7 @@ VAR bullets = 0
     -> END
 
 = accept_award
-    It was an incredible risk, but you made it through! A handsome sum of money is transferred to your account and a _Certificate of Dumb Luck_ will be mailed to your home already framed. <>
+    It was an incredible risk, but you made it through! A handsome sum of money is transferred to your account and a Certificate of Dumb Luck will be mailed to your home already framed. <>
     -> stop
 
 = stop

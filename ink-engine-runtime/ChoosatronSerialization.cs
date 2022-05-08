@@ -323,7 +323,8 @@ namespace Ink.Runtime
                 Raw,
                 Var,
                 Op,
-                Visits
+                Visits,
+                NA // Not Applicable - only need one operand
             }
 
             public enum OperationType
@@ -352,7 +353,7 @@ namespace Ink.Runtime
                 Dice, // Returns int16_t - take # of dice & # of sides per die
                 IfStatement, // Returns 0 if false, result of right operand if true
                 Negate, // Returns int16_t - positive val becomes negative, negative val becomes positive
-                Not, // Returns 0 or 1 - if val not 0, returns 0, if val is 0, returns 1
+                Not, // Returns 0 or 1 - if val greater than 0, returns 0, if val is 0 or less, returns 1
                 Min, // Returns int16_t - the smaller of the two numbers
                 Max, // Returns int16_t - the larger of the two numbers
                 Pow, // Returns int16_t - val a to the power of val b
@@ -628,7 +629,6 @@ namespace Ink.Runtime
             };
         }
 
-
         public static void WriteBinary(SimpleChoosatron.Writer aWriter, Container aContainer, bool aVerbose) {
             _verbose = aVerbose;
 
@@ -767,6 +767,11 @@ namespace Ink.Runtime
                             _state = State.NamedContent;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
+                    } else if (_state == State.PassageUpdateCondition) {
+                        if (name == "b") {
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            _state = State.NamedContent;
+                        }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceContent;
@@ -854,8 +859,11 @@ namespace Ink.Runtime
                 if (divert.isConditional) {
                     //writer.WriteProperty("c", true);
                     if (_state == State.ChoiceUpdate) {
-                        if (_debug) Console.WriteLine("<Update w/ Conditional");
+                        if (_debug) Console.WriteLine("<Choice Update w/ Conditional");
                         _state = State.ChoiceUpdateCondition;
+                    } else if (_state == State.PassageUpdate) {
+                        if (_debug) Console.WriteLine("<Psg Update w/ Conditional");
+                        _state = State.PassageUpdateCondition;
                     }
                 }
 
@@ -892,7 +900,14 @@ namespace Ink.Runtime
                     _psg.AddChoice(c);
                     _state = State.Passage;
                 } else if (_state == State.ChoiceContent) {
-                    if (!targetStr.StartsWith(".^")) {
+                    // NOTE: Originally had "!targetStr.StartsWith(".^")" below
+                    // VAR stories aren't parsing since removing that.
+                    // Can we just iterate over everything first to make a list of 'good' named passages?
+                    string[] parts = divert.targetPath.componentsString.Split( '.' );
+                    string end = parts[parts.Length - 1];
+
+                    //if (!divert.targetPath.componentsString.Contains(_psg.Name) && !divert.targetPath.componentsString.EndsWith(".s")) {
+                    if (!Int16.TryParse(end, out _) && (end != "s")) {
                         // In case it was a newline prior to divert.
                         _watchForChoiceUpdate = false;
                         if (_debug) Console.WriteLine(_indent + "[Divert] Choice Link->" + divert.targetPath.componentsString);
@@ -906,7 +921,7 @@ namespace Ink.Runtime
                             if (_debug) Console.WriteLine(_indent + kIndent + "Choice Text: " + _choice.Body);
                         }
                         _state = State.Passage;
-                    } // There is an extra default 
+                    }
                 } else {
                     if (_debug) Console.WriteLine(_indent + "[Divert] " + divTypeKey + " " + targetStr);
                 }
@@ -1005,10 +1020,11 @@ namespace Ink.Runtime
             var strVal = aObj as StringValue;
             if (strVal) {
                 if (strVal.isNewline) {
-                    if (_debug) Console.WriteLine(_indent + "^ Newline");
+                    if (_debug) Console.WriteLine(_indent + "^ Newline - " + _state);
                     if (_state == State.PassageContent) {
                         _psg.Body += "\n";
                     } else if (_state == State.ChoiceContent) {
+                        if (_debug) Console.WriteLine(_indent + "[WAITING FOR UPDATE]");
                         _watchForChoiceUpdate = true;
                     }
                     //writer.Write("\\n", escape:false);  
@@ -1094,7 +1110,7 @@ namespace Ink.Runtime
 
             var controlCmd = aObj as ControlCommand;
             if (controlCmd) {
-                if (_debug) Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString());
+                if (_debug) Console.WriteLine(_indent + "[CtrlCmd] " + controlCmd.ToString() + " - " + _state);
 
                 if (controlCmd.commandType == ControlCommand.CommandType.EvalStart) {
                     
@@ -1112,6 +1128,8 @@ namespace Ink.Runtime
                         _state = State.ChoiceUpdate;
                         _opStack.Add(new Operation());
                         if (_debug) Console.WriteLine("<Start Choice Update Eval>");
+                    } else if (_state == State.PassageUpdateCondition) {
+                        _evaluating = true;
                     } else if (_state == State.ChoiceUpdateCondition) {
                         _evaluating = true;
                     } else if (_state == State.VarDeclarations) {
@@ -1235,7 +1253,7 @@ namespace Ink.Runtime
                 // Reassignment?
                 if (!varAss.isNewDeclaration) {
                     //writer.WriteProperty("re", true);
-                    if (_debug) Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName);
+                    if (_debug) Console.WriteLine(_indent + "[VarAss] re " + key + varAss.variableName + " - " + _state);
                     // Either Passage or Choice update.
                     // Should be two operations on the stack. Idx 0 has the operation, idx 1 is empty for use.
                     if (_opStack[_opIdx].IsEmpty()) {
@@ -1264,6 +1282,18 @@ namespace Ink.Runtime
                         // if (_evaluating) {
                             _watchForChoiceUpdate = true;
                         // }
+                    } else if (_state == State.PassageUpdateCondition) {
+                        // New operation to hold the conditional structure.
+                        _opStack.Add(new Operation());
+                        _opIdx++;
+
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                        _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
+                        _psg.AddUpdate(_opStack[_opIdx]);
+                        // _state = State.NamedContent;
+                        _opStack.Clear();
+                        _opIdx = 0;
                     } else if (_state == State.ChoiceUpdateCondition) {
                         // New operation to hold the conditional structure.
                         _opStack.Add(new Operation());
@@ -1608,11 +1638,11 @@ namespace Ink.Runtime
         static string _indent = "";
         static int _dataDepth = 0;
         static State _state = State.None;
-        static bool _evaluating = false;
         static Passage _psg;
         static Choice _choice;
         static List<Operation> _opStack = new List<Operation>();
         static UInt16 _opIdx = 0;
+        static bool _evaluating = false;
         static string _choiceOnlyContent;
         static bool _watchForChoiceUpdate;
         static UInt16 _varIdx = 0;
@@ -1652,6 +1682,7 @@ namespace Ink.Runtime
             None,
             NamedContent,
             PassageUpdate,
+            PassageUpdateCondition,
             PassageContent,
             Passage,
             GluePassage,

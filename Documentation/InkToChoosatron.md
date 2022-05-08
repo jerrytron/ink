@@ -233,7 +233,17 @@ There are three ways to force a knot/stitch to append itself to a linked knot/st
     -> next
 ```
 
-The content of _start_ will append to the content of _next_ without a pause or newline. Another syntax, perhaps simpler, is having a single choice with no content. This will behave exactly as the above example.
+The content of _start_ will append to the content of _next_ without a pause or newline.
+
+You can also use a reserved Choosatron command a single choices content. This will perform the same function. Essentially just a longform version of the previous method, but sometimes being verbose can help you keep track of your story's structure.
+
+```
+=== start ===
+    You stand in a concrete room. The only visible features being the copper colored smears and cracks in the concrete.
+    + <append> -> next
+```
+
+This is not a preferred syntax as it makes the strong assumption that you _didn't_ simply forgot to include content in your choice. If you have a _single_ choice and you _don't_ include content for that choice, it will be treated as an append. Currently it will output a warning to ensure you intended this. The warning may be removed in the future if this functionality doesn't cause issues, but it is better if you use either of the officially supported methods above to append.
 
 ```
 === start ===
@@ -241,13 +251,6 @@ The content of _start_ will append to the content of _next_ without a pause or n
     + -> next
 ```
 
-Finally, you can use a reserved Choosatron command a single choices content. This will perform the same function. Essentially just a longform version of the previous method, but sometimes being verbose can help you keep track of your story's structure.
-
-```
-=== start ===
-    You stand in a concrete room. The only visible features being the copper colored smears and cracks in the concrete.
-    + <append> -> next
-```
 
 ### Continue Choice
 
