@@ -1,5 +1,5 @@
 // Choosatron Metadata Tags
-# title: Example Title
+# title: Example Title w/ Vars
 # subtitle: The Epic Tale
 # author: Author Person
 # credits: My frans and fam.
@@ -74,7 +74,7 @@ VAR spinning_right = false
 = spin_again
     // The chair looses speed every turn.
     { chair_speed > 0:
-      ~ chair_speed--
+        ~ chair_speed--
     }
     The world blurs and the sensation makes you tingle!
     // By tracking the direction the choice content can be more contextual.

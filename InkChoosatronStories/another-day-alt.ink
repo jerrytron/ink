@@ -1,5 +1,5 @@
 // Choosatron Metadata Tags
-# title: Another Day at the MIA
+# title: Another Day at the MIA Alt
 # subtitle: test subtitle
 # author: Jerry Belich
 # credits: All my friends!
