@@ -188,12 +188,27 @@ namespace Ink.Runtime
             //     _writer.Write(i);
             // }
 
+            public void Write(Int16 i)
+            {
+                _writer.Write(i);
+            }
+
             public void Write(UInt16 i)
             {
                 _writer.Write(i);
             }
 
+            public void Write(Int32 i)
+            {
+                _writer.Write(i);
+            }
+
             public void Write(UInt32 i)
+            {
+                _writer.Write(i);
+            }
+
+            public void Write(Int64 i)
             {
                 _writer.Write(i);
             }

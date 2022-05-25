@@ -53,6 +53,10 @@ namespace Ink.Runtime
                 _updateOps.Add(aUpdate);
             }
 
+            public List<Operation> GetUpdates() {
+                return _updateOps;
+            }
+
             public List<Choice> GetChoices() {
                 return _choices;
             }
@@ -229,6 +233,14 @@ namespace Ink.Runtime
 
             public void AddUpdate(Operation aUpdate) {
                 _updateOps.Add(aUpdate);
+            }
+
+            public List<Operation> GetConditions() {
+                return _conditionOps;
+            }
+
+            public List<Operation> GetUpdates() {
+                return _updateOps;
             }
 
             public string GetChoiceText() {
@@ -489,6 +501,20 @@ namespace Ink.Runtime
 
             public UInt32 GetByteLength() { return _byteLength; }
 
+            public void ResolveVars(Dictionary<string, Int16> aVarToIdx) {
+                if (LeftType == OperandType.Var && aVarToIdx.ContainsKey(LeftName)) {
+                    LeftVal = aVarToIdx[LeftName];
+                } else if (LeftType == OperandType.Op) {
+                    LeftOp.ResolveVars(aVarToIdx);
+                }
+
+                if (RightType == OperandType.Var && aVarToIdx.ContainsKey(RightName)) {
+                    RightVal = aVarToIdx[RightName];
+                } else if (RightType == OperandType.Op) {
+                    RightOp.ResolveVars(aVarToIdx);
+                }
+            }
+
             public byte[] ToBytes() {
                 //MemoryStream stream = new MemoryStream();
                 SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( new MemoryStream() );
@@ -498,21 +524,26 @@ namespace Ink.Runtime
                 // Shift the left value to the left side of the byte.
                 bothTypes = (byte)(bothTypes << 4);
                 // Add the right side.
-                bothTypes = (byte)(bothTypes & (byte)RightType);
+                bothTypes = (byte)(bothTypes | (byte)RightType);
+                // Console.WriteLine("LEFT: " + LeftType + ", RIGHT: " + RightType);
+                // Console.WriteLine("LEFT-RIGHT BYTE: " + Bits.GetBinaryString(bothTypes));
                 writer.Write(bothTypes);
 
                 // 1 byte for operation type.
                 writer.Write((byte)_opType);
+                // Console.WriteLine("OpType: " + _opType + ", BYTE: " + Bits.GetBinaryString((byte)_opType));
 
                 if (LeftType == OperandType.Op) {
                     writer.Write(LeftOp.ToBytes());
                 } else {
+                    // Console.WriteLine("LeftVal: " + LeftVal);
                     writer.Write(LeftVal);
                 }
 
                 if (RightType == OperandType.Op) {
                     writer.Write(RightOp.ToBytes());
                 } else {
+                    // Console.WriteLine("RightVal: " + RightVal);
                     writer.Write(RightVal);
                 }
 
@@ -596,10 +627,6 @@ namespace Ink.Runtime
                 }
             }
 
-            static void Functions() {
-                
-            }
-
             static string[] _operationNames;
 
             static Dictionary<string, OperationType> _functionMap = new Dictionary<string, OperationType> {
@@ -662,6 +689,7 @@ namespace Ink.Runtime
 
             // Update choice links to match passage indexes.
             ResolveReferences();
+            Console.WriteLine("Done resolving.");
 
             UInt32 storySize = 0;
             // Generate passage bytes.
@@ -679,8 +707,15 @@ namespace Ink.Runtime
             byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, _varIdx);
             aWriter.Write( header );
 
+            Console.WriteLine("Header length: " + header.Length);
+            if (header.Length != 414) {
+                throw new System.Exception("Header should be 414 bytes, is: " + header.Length);
+            }
+
             // Passage Count - 2 bytes - Location 414 / 0x019E
             aWriter.Write((UInt16)_passages.Count);
+
+            Console.WriteLine("Passage count: " + _passages.Count);
 
             // Passage Offsets - 4 bytes each
             foreach (UInt32 size in _psgOffsets) {
@@ -695,6 +730,12 @@ namespace Ink.Runtime
 
         static void ResolveReferences() {
             foreach (Passage p in _passages) {
+                // Console.WriteLine(p.Name);
+                foreach (Operation op in p.GetUpdates()) {
+                    // Console.WriteLine("LeftName: " + op.LeftName);
+                    op.ResolveVars(_varToIdx);
+                }
+
                 foreach (Choice c in p.GetChoices()) {
                     if (_psgToIdx.ContainsKey(c.PsgLink)) {
                         c.PsgIdx = _psgToIdx[c.PsgLink];
@@ -702,6 +743,13 @@ namespace Ink.Runtime
                         c.PsgIdx = _psgToIdx[_psgAliases[c.PsgLink]];
                     }
                     // Console.WriteLine("Idx: " + c.PsgIdx);
+
+                    foreach (Operation op in c.GetConditions()) {
+                        op.ResolveVars(_varToIdx);
+                    }
+                    foreach (Operation op in c.GetUpdates()) {
+                        op.ResolveVars(_varToIdx);
+                    }
                 }
             }
         }
@@ -767,11 +815,6 @@ namespace Ink.Runtime
                             _state = State.NamedContent;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
-                    } else if (_state == State.PassageUpdateCondition) {
-                        if (name == "b") {
-                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            _state = State.NamedContent;
-                        }
                     } else if (_state == State.Passage) {
                         if (name.StartsWith("c-")) {
                             _state = State.ChoiceContent;
@@ -786,8 +829,15 @@ namespace Ink.Runtime
                         if (name == "s") {
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
-                    } else if (_state == State.ChoiceUpdateCondition) {
+                    } else if (_state == State.PassageUpdate) {
                         if (name == "b") {
+                            _state = State.PassageUpdateCondition;
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            _state = State.NamedContent;
+                        }
+                    } else if (_state == State.ChoiceUpdate) {
+                        if (name == "b") {
+                            _state = State.ChoiceUpdateCondition;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                         }
                     }
@@ -860,10 +910,12 @@ namespace Ink.Runtime
                     //writer.WriteProperty("c", true);
                     if (_state == State.ChoiceUpdate) {
                         if (_debug) Console.WriteLine("<Choice Update w/ Conditional");
-                        _state = State.ChoiceUpdateCondition;
+                        // _state = State.ChoiceUpdateCondition;
+                        _inConditionUpdate = true;
                     } else if (_state == State.PassageUpdate) {
                         if (_debug) Console.WriteLine("<Psg Update w/ Conditional");
-                        _state = State.PassageUpdateCondition;
+                        // _state = State.PassageUpdateCondition;
+                        _inConditionUpdate = true;
                     }
                 }
 
@@ -1181,6 +1233,10 @@ namespace Ink.Runtime
                     if (_evaluating) {
                         ProcessOperation(controlCmd.ToString());
                     }
+                } else if (controlCmd.commandType == ControlCommand.CommandType.NoOp) {
+                    // TODO: If a conditional series is being built, it should now be complete.
+                    _buildingConditional = false;
+                    _inConditionUpdate = false;
                 }
                 return;
             }
@@ -1428,7 +1484,7 @@ namespace Ink.Runtime
             }
         }
 
-        static byte[] BuildHeader(SimpleChoosatron.Writer aWriter, Container aContainer, UInt32 aStorySize, UInt16 aVarCount) {
+        static byte[] BuildHeader(SimpleChoosatron.Writer aWriter, Container aContainer, UInt32 aStorySize, Int16 aVarCount) {
             MemoryStream stream = new MemoryStream();
             SimpleChoosatron.Writer writer = new SimpleChoosatron.Writer( stream );
 
@@ -1583,9 +1639,10 @@ namespace Ink.Runtime
             published = dto.ToUnixTimeSeconds();
             writer.Write((UInt32)published);
             if (_debug) Console.WriteLine("Publish Time in Unix Epoch Seconds: " + published);
-             
+
             // Variable Count - 2 bytes - Location 412 / 0x019C
-            writer.Write(aVarCount);
+            UInt16 vars = (UInt16)aVarCount;
+            writer.Write(vars);
 
             // Passage Count - 2 bytes - Location 414 / 0x019E
             // UInt16 psgCount = 0;
@@ -1644,14 +1701,16 @@ namespace Ink.Runtime
         static UInt16 _opIdx = 0;
         static bool _evaluating = false;
         static string _choiceOnlyContent;
-        static bool _watchForChoiceUpdate;
-        static UInt16 _varIdx = 0;
+        static bool _watchForChoiceUpdate = false;
+        static bool _buildingConditional = false;
+        static bool _inConditionUpdate = false;
+        static Int16 _varIdx = 0;
         static int _newPsgDepth = 0;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<Passage> _passages = new List<Passage>();
         static Dictionary<string, UInt16> _psgToIdx = new Dictionary<string, UInt16>();
         static List<UInt32> _psgOffsets = new List<UInt32>();
-        static Dictionary<string, UInt16> _varToIdx = new Dictionary<string, UInt16>();
+        static Dictionary<string, Int16> _varToIdx = new Dictionary<string, Int16>();
         static List<Int16> _vars = new List<Int16>();
 
         public const string kIndent = "  ";
