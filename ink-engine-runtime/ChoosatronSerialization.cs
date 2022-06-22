@@ -363,7 +363,8 @@ namespace Ink.Runtime
                 Divide, // Returns int16_t - non float, whole number
                 Random, // Returns int16_t - takes min & max (inclusive)
                 Dice, // Returns int16_t - take # of dice & # of sides per die
-                IfStatement, // Returns 0 if false, result of right operand if true
+                IfStatement, // If true, allows assignment operation to occur and returns 1
+                ElseStatement, // If the IF condition is false, the right operation is allowed to assign and returns 1
                 Negate, // Returns int16_t - positive val becomes negative, negative val becomes positive
                 Not, // Returns 0 or 1 - if val greater than 0, returns 0, if val is 0 or less, returns 1
                 Min, // Returns int16_t - the smaller of the two numbers
@@ -499,6 +500,10 @@ namespace Ink.Runtime
                 _opType = aOp;
             }
 
+            public OperationType GetOpType() {
+                return _opType;
+            }
+
             public UInt32 GetByteLength() { return _byteLength; }
 
             public void ResolveVars(Dictionary<string, Int16> aVarToIdx) {
@@ -614,6 +619,7 @@ namespace Ink.Runtime
                 _operationNames [(int)OperationType.Random] = "RANDOM";
                 _operationNames [(int)OperationType.Dice] = "DICE";
                 _operationNames [(int)OperationType.IfStatement] = "If";
+                _operationNames [(int)OperationType.ElseStatement] = "Else";
                 _operationNames [(int)OperationType.Negate] = "_";
                 _operationNames [(int)OperationType.Not] = "!";
                 _operationNames [(int)OperationType.Min] = "MIN";
@@ -689,7 +695,7 @@ namespace Ink.Runtime
 
             // Update choice links to match passage indexes.
             ResolveReferences();
-            Console.WriteLine("Done resolving.");
+            if (_debug) Console.WriteLine("Done resolving.");
 
             UInt32 storySize = 0;
             // Generate passage bytes.
@@ -707,7 +713,7 @@ namespace Ink.Runtime
             byte[] header = BuildHeader(aWriter, aContainer.content[0] as Container, storySize, _varIdx);
             aWriter.Write( header );
 
-            Console.WriteLine("Header length: " + header.Length);
+            if (_debug) Console.WriteLine("Header length: " + header.Length);
             if (header.Length != 414) {
                 throw new System.Exception("Header should be 414 bytes, is: " + header.Length);
             }
@@ -715,7 +721,7 @@ namespace Ink.Runtime
             // Passage Count - 2 bytes - Location 414 / 0x019E
             aWriter.Write((UInt16)_passages.Count);
 
-            Console.WriteLine("Passage count: " + _passages.Count);
+            if (_debug) Console.WriteLine("Passage count: " + _passages.Count);
 
             // Passage Offsets - 4 bytes each
             foreach (UInt32 size in _psgOffsets) {
@@ -832,13 +838,46 @@ namespace Ink.Runtime
                     } else if (_state == State.PassageUpdate) {
                         if (name == "b") {
                             _state = State.PassageUpdateCondition;
+                            _buildingConditional = true;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            _state = State.NamedContent;
+                            _inConditionUpdate = false;
+                        }
+                    } else if (_state == State.PassageUpdateCondition) {
+                        if (name == "b") {
+                            if (!_inConditionUpdate) {
+                                _opStack.Add(new Operation());
+                                _opIdx++;
+                                _state = State.PassageUpdateConditionElse;
+                                Console.WriteLine( "<STARTING ELSE");
+                            } else {
+                                _state = State.PassageUpdateCondition;
+                                Console.WriteLine( "<STARTING ELSE IF");
+                            }
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            Console.WriteLine( "<END ELSE or ELSE IF");
+                            _inConditionUpdate = false;
                         }
                     } else if (_state == State.ChoiceUpdate) {
                         if (name == "b") {
                             _state = State.ChoiceUpdateCondition;
+                            _buildingConditional = true;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            _inConditionUpdate = false;
+                        }
+                    } else if (_state == State.ChoiceUpdateCondition) {
+                        if (name == "b") {
+                            if (!_inConditionUpdate) {
+                                _opStack.Add(new Operation());
+                                _opIdx++;
+                                _state = State.PassageUpdateConditionElse;
+                                Console.WriteLine( "<STARTING ELSE");
+                            } else {
+                                _state = State.PassageUpdateCondition;
+                                Console.WriteLine( "<STARTING ELSE IF");
+                            }
+                            ParseRuntimeContainer(namedContainer, aWithoutName:true);
+                            Console.WriteLine( "<END ELSE or ELSE IF");
+                            _inConditionUpdate = false;
                         }
                     }
                 }
@@ -908,11 +947,11 @@ namespace Ink.Runtime
 
                 if (divert.isConditional) {
                     //writer.WriteProperty("c", true);
-                    if (_state == State.ChoiceUpdate) {
+                    if (_state == State.ChoiceUpdate || _state == State.ChoiceUpdateCondition || _state == State.ChoiceUpdateConditionElse) {
                         if (_debug) Console.WriteLine("<Choice Update w/ Conditional");
                         // _state = State.ChoiceUpdateCondition;
                         _inConditionUpdate = true;
-                    } else if (_state == State.PassageUpdate) {
+                    } else if (_state == State.PassageUpdate || _state == State.PassageUpdateCondition || _state == State.PassageUpdateConditionElse) {
                         if (_debug) Console.WriteLine("<Psg Update w/ Conditional");
                         // _state = State.PassageUpdateCondition;
                         _inConditionUpdate = true;
@@ -1181,8 +1220,30 @@ namespace Ink.Runtime
                         _opStack.Add(new Operation());
                         if (_debug) Console.WriteLine("<Start Choice Update Eval>");
                     } else if (_state == State.PassageUpdateCondition) {
+                        if (_opStack.Count == 1 && _opStack[0].GetOpType() == Operation.OperationType.IfStatement) {
+                            _opStack.Add(new Operation());
+                            _opIdx++;
+                        }
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<EVAL OP STACK[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+                        _evaluating = true;
+                    } else if (_state == State.PassageUpdateConditionElse) {
                         _evaluating = true;
                     } else if (_state == State.ChoiceUpdateCondition) {
+                        if (_opStack.Count == 1 && _opStack[0].GetOpType() == Operation.OperationType.IfStatement) {
+                            _opStack.Add(new Operation());
+                            _opIdx++;
+                        }
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<EVAL OP STACK[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+                        _evaluating = true;
+                    } else if (_state == State.ChoiceUpdateConditionElse) {
                         _evaluating = true;
                     } else if (_state == State.VarDeclarations) {
                         _evaluating = true;
@@ -1235,8 +1296,18 @@ namespace Ink.Runtime
                     }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.NoOp) {
                     // TODO: If a conditional series is being built, it should now be complete.
+
+                    if (_state == State.PassageUpdateCondition || _state == State.PassageUpdateConditionElse) {
+                        _state = State.NamedContent;
+                        _opStack.Clear();
+                        _opIdx = 0;
+                    } else if (_state == State.ChoiceUpdateCondition || _state == State.ChoiceUpdateConditionElse) {
+                        _state = State.ChoiceContent;
+                        _opStack.Clear();
+                        _opIdx = 0;
+                    }
+
                     _buildingConditional = false;
-                    _inConditionUpdate = false;
                 }
                 return;
             }
@@ -1347,9 +1418,79 @@ namespace Ink.Runtime
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                         _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
                         _psg.AddUpdate(_opStack[_opIdx]);
+
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        _opStack.RemoveAt(_opIdx-2);
+                        _opIdx--;
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opIdx--;
+
+                        // We have two IF operations. Combine them with an ELSE operation.
+                        if (_opStack.Count == 2) {
+                            _opStack.Add(new Operation());
+                            _opIdx++;
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                            _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
+                            _psg.AddUpdate(_opStack[_opIdx]);
+
+                            idx = 0;
+                            foreach (Operation op in _opStack) {
+                                if (_debug) Console.WriteLine("<STACK2[" + idx + "] " + op.ToString());
+                                idx++;
+                            }
+
+                            _opStack.RemoveAt(_opIdx-2);
+                            _opIdx--;
+                            _opStack.RemoveAt(_opIdx-1);
+                            _opIdx--;
+                        }
+
+                        idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK3[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        if (_debug) Console.WriteLine("<End Psg Update Condition Eval: " + _opStack[_opIdx].ToString());
                         // _state = State.NamedContent;
-                        _opStack.Clear();
-                        _opIdx = 0;
+                        // _opStack.Clear();
+                        // _opIdx = 0;
+                    } else if (_state == State.PassageUpdateConditionElse) {
+                        // New operation to hold the conditional structure.
+                        _opStack.Add(new Operation());
+                        _opIdx++;
+
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                        _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
+                        _psg.AddUpdate(_opStack[_opIdx]);
+
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK-E[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        _opStack.RemoveAt(_opIdx-2);
+                        _opIdx--;
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opIdx--;
+
+                        if (_debug) Console.WriteLine("<ELSE OP STACK COUNT: " + _opStack.Count);
+                        idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK-E2[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        if (_debug) Console.WriteLine("<End Psg Update Condition Else Eval: " + _opStack[_opIdx].ToString());
+
                     } else if (_state == State.ChoiceUpdateCondition) {
                         // New operation to hold the conditional structure.
                         _opStack.Add(new Operation());
@@ -1359,9 +1500,72 @@ namespace Ink.Runtime
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                         _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
                         _choice.AddUpdate(_opStack[_opIdx]);
-                        _state = State.ChoiceContent;
-                        _opStack.Clear();
-                        _opIdx = 0;
+
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        _opStack.RemoveAt(_opIdx-2);
+                        _opIdx--;
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opIdx--;
+
+                        // We have two IF operations. Combine them with an ELSE operation.
+                        if (_opStack.Count == 2) {
+                            _opStack.Add(new Operation());
+                            _opIdx++;
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                            _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
+                            _psg.AddUpdate(_opStack[_opIdx]);
+
+                            idx = 0;
+                            foreach (Operation op in _opStack) {
+                                if (_debug) Console.WriteLine("<STACK2[" + idx + "] " + op.ToString());
+                                idx++;
+                            }
+
+                            _opStack.RemoveAt(_opIdx-2);
+                            _opIdx--;
+                            _opStack.RemoveAt(_opIdx-1);
+                            _opIdx--;
+                        }
+
+                        if (_debug) Console.WriteLine("<End Choice Update Condition Eval: " + _opStack[_opIdx].ToString());
+                        // _state = State.ChoiceContent;
+                        // _opStack.Clear();
+                        // _opIdx = 0;
+                    } else if (_state == State.ChoiceUpdateConditionElse) {
+                        // New operation to hold the conditional structure.
+                        _opStack.Add(new Operation());
+                        _opIdx++;
+
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
+                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
+                        _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
+                        _psg.AddUpdate(_opStack[_opIdx]);
+
+                        int idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK-E[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        _opStack.RemoveAt(_opIdx-2);
+                        _opIdx--;
+                        _opStack.RemoveAt(_opIdx-1);
+                        _opIdx--;
+
+                        if (_debug) Console.WriteLine("<ELSE OP STACK COUNT: " + _opStack.Count);
+                        idx = 0;
+                        foreach (Operation op in _opStack) {
+                            if (_debug) Console.WriteLine("<STACK-E2[" + idx + "] " + op.ToString());
+                            idx++;
+                        }
+
+                        if (_debug) Console.WriteLine("<End Choice Update Condition Else Eval: " + _opStack[_opIdx].ToString());
                     }
                     
                 } else {
@@ -1436,9 +1640,11 @@ namespace Ink.Runtime
                     _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                     _opStack[_opIdx].SetOpType(aName);
                     _opStack.RemoveAt(_opIdx-1);
+                    // _opIdx--;
                     _opStack.RemoveAt(_opIdx-2);
                     _opIdx--;
                     _opStack.Add(new Operation());
+                    // _opIdx++;
                 } else {
                     if (_opIdx > 0) {
                         if (!_opStack[_opIdx].InjectOperationLeft(_opStack[_opIdx-1], aName)) {
@@ -1470,6 +1676,9 @@ namespace Ink.Runtime
 
         static void ProcessFullOperation() {
             if (_debug) Console.WriteLine("IS FULL: " + _opStack.Count);
+            for (int i = 0; i < _opStack.Count; i++) {
+                if (_debug) Console.WriteLine("IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
+            }
             _opStack.Add(new Operation());
             _opIdx++;
             _opStack[_opIdx].LeftType = _opStack[_opIdx-1].RightType;
@@ -1480,7 +1689,7 @@ namespace Ink.Runtime
             _opStack[_opIdx-1].RightVal = 0;
             _opStack[_opIdx-1].RightName = "";
             for (int i = 0; i < _opStack.Count; i++) {
-                if (_debug) Console.WriteLine("1IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
+                if (_debug) Console.WriteLine("IS FULL " + i + ", CURRENT OP: " + _opStack[i].ToString());
             }
         }
 
@@ -1690,7 +1899,7 @@ namespace Ink.Runtime
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static bool _debug = false; // Print all the crazy console writes.
+        static bool _debug = true; // Print all the crazy console writes.
         static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;
@@ -1742,6 +1951,7 @@ namespace Ink.Runtime
             NamedContent,
             PassageUpdate,
             PassageUpdateCondition,
+            PassageUpdateConditionElse,
             PassageContent,
             Passage,
             GluePassage,
@@ -1752,6 +1962,7 @@ namespace Ink.Runtime
             ChoiceContent,
             ChoiceUpdate,
             ChoiceUpdateCondition,
+            ChoiceUpdateConditionElse,
             ChoiceLink,
             VarDeclarations
         };
