@@ -869,10 +869,10 @@ namespace Ink.Runtime
                             if (!_inConditionUpdate) {
                                 _opStack.Add(new Operation());
                                 _opIdx++;
-                                _state = State.PassageUpdateConditionElse;
+                                _state = State.ChoiceUpdateConditionElse;
                                 Console.WriteLine( "<STARTING ELSE");
                             } else {
-                                _state = State.PassageUpdateCondition;
+                                _state = State.ChoiceUpdateCondition;
                                 Console.WriteLine( "<STARTING ELSE IF");
                             }
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
@@ -949,11 +949,9 @@ namespace Ink.Runtime
                     //writer.WriteProperty("c", true);
                     if (_state == State.ChoiceUpdate || _state == State.ChoiceUpdateCondition || _state == State.ChoiceUpdateConditionElse) {
                         if (_debug) Console.WriteLine("<Choice Update w/ Conditional");
-                        // _state = State.ChoiceUpdateCondition;
                         _inConditionUpdate = true;
                     } else if (_state == State.PassageUpdate || _state == State.PassageUpdateCondition || _state == State.PassageUpdateConditionElse) {
                         if (_debug) Console.WriteLine("<Psg Update w/ Conditional");
-                        // _state = State.PassageUpdateCondition;
                         _inConditionUpdate = true;
                     }
                 }
@@ -1219,7 +1217,7 @@ namespace Ink.Runtime
                         _state = State.ChoiceUpdate;
                         _opStack.Add(new Operation());
                         if (_debug) Console.WriteLine("<Start Choice Update Eval>");
-                    } else if (_state == State.PassageUpdateCondition) {
+                    } else if (_state == State.PassageUpdateCondition || _state == State.ChoiceUpdateCondition) {
                         if (_opStack.Count == 1 && _opStack[0].GetOpType() == Operation.OperationType.IfStatement) {
                             _opStack.Add(new Operation());
                             _opIdx++;
@@ -1230,20 +1228,7 @@ namespace Ink.Runtime
                             idx++;
                         }
                         _evaluating = true;
-                    } else if (_state == State.PassageUpdateConditionElse) {
-                        _evaluating = true;
-                    } else if (_state == State.ChoiceUpdateCondition) {
-                        if (_opStack.Count == 1 && _opStack[0].GetOpType() == Operation.OperationType.IfStatement) {
-                            _opStack.Add(new Operation());
-                            _opIdx++;
-                        }
-                        int idx = 0;
-                        foreach (Operation op in _opStack) {
-                            if (_debug) Console.WriteLine("<EVAL OP STACK[" + idx + "] " + op.ToString());
-                            idx++;
-                        }
-                        _evaluating = true;
-                    } else if (_state == State.ChoiceUpdateConditionElse) {
+                    } else if (_state == State.PassageUpdateConditionElse || _state == State.ChoiceUpdateConditionElse) {
                         _evaluating = true;
                     } else if (_state == State.VarDeclarations) {
                         _evaluating = true;
@@ -1409,7 +1394,7 @@ namespace Ink.Runtime
                         // if (_evaluating) {
                             _watchForChoiceUpdate = true;
                         // }
-                    } else if (_state == State.PassageUpdateCondition) {
+                    } else if (_state == State.PassageUpdateCondition || _state == State.ChoiceUpdateCondition) {
                         // New operation to hold the conditional structure.
                         _opStack.Add(new Operation());
                         _opIdx++;
@@ -1458,10 +1443,7 @@ namespace Ink.Runtime
                         }
 
                         if (_debug) Console.WriteLine("<End Psg Update Condition Eval: " + _opStack[_opIdx].ToString());
-                        // _state = State.NamedContent;
-                        // _opStack.Clear();
-                        // _opIdx = 0;
-                    } else if (_state == State.PassageUpdateConditionElse) {
+                    } else if (_state == State.PassageUpdateConditionElse || _state == State.ChoiceUpdateConditionElse) {
                         // New operation to hold the conditional structure.
                         _opStack.Add(new Operation());
                         _opIdx++;
@@ -1490,84 +1472,7 @@ namespace Ink.Runtime
                         }
 
                         if (_debug) Console.WriteLine("<End Psg Update Condition Else Eval: " + _opStack[_opIdx].ToString());
-
-                    } else if (_state == State.ChoiceUpdateCondition) {
-                        // New operation to hold the conditional structure.
-                        _opStack.Add(new Operation());
-                        _opIdx++;
-
-                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
-                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
-                        _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
-                        _choice.AddUpdate(_opStack[_opIdx]);
-
-                        int idx = 0;
-                        foreach (Operation op in _opStack) {
-                            if (_debug) Console.WriteLine("<STACK[" + idx + "] " + op.ToString());
-                            idx++;
-                        }
-
-                        _opStack.RemoveAt(_opIdx-2);
-                        _opIdx--;
-                        _opStack.RemoveAt(_opIdx-1);
-                        _opIdx--;
-
-                        // We have two IF operations. Combine them with an ELSE operation.
-                        if (_opStack.Count == 2) {
-                            _opStack.Add(new Operation());
-                            _opIdx++;
-                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
-                            _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
-                            _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
-                            _psg.AddUpdate(_opStack[_opIdx]);
-
-                            idx = 0;
-                            foreach (Operation op in _opStack) {
-                                if (_debug) Console.WriteLine("<STACK2[" + idx + "] " + op.ToString());
-                                idx++;
-                            }
-
-                            _opStack.RemoveAt(_opIdx-2);
-                            _opIdx--;
-                            _opStack.RemoveAt(_opIdx-1);
-                            _opIdx--;
-                        }
-
-                        if (_debug) Console.WriteLine("<End Choice Update Condition Eval: " + _opStack[_opIdx].ToString());
-                        // _state = State.ChoiceContent;
-                        // _opStack.Clear();
-                        // _opIdx = 0;
-                    } else if (_state == State.ChoiceUpdateConditionElse) {
-                        // New operation to hold the conditional structure.
-                        _opStack.Add(new Operation());
-                        _opIdx++;
-
-                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
-                        _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
-                        _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
-                        _psg.AddUpdate(_opStack[_opIdx]);
-
-                        int idx = 0;
-                        foreach (Operation op in _opStack) {
-                            if (_debug) Console.WriteLine("<STACK-E[" + idx + "] " + op.ToString());
-                            idx++;
-                        }
-
-                        _opStack.RemoveAt(_opIdx-2);
-                        _opIdx--;
-                        _opStack.RemoveAt(_opIdx-1);
-                        _opIdx--;
-
-                        if (_debug) Console.WriteLine("<ELSE OP STACK COUNT: " + _opStack.Count);
-                        idx = 0;
-                        foreach (Operation op in _opStack) {
-                            if (_debug) Console.WriteLine("<STACK-E2[" + idx + "] " + op.ToString());
-                            idx++;
-                        }
-
-                        if (_debug) Console.WriteLine("<End Choice Update Condition Else Eval: " + _opStack[_opIdx].ToString());
                     }
-                    
                 } else {
                     string varName = varAss.isGlobal ? aParentPath + " " + varAss.variableName : varAss.variableName;
 
