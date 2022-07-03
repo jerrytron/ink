@@ -3,7 +3,6 @@ using System.Text;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.IO;
-using System.Linq;
 
 namespace Ink.Runtime
 {
@@ -848,13 +847,13 @@ namespace Ink.Runtime
                                 _opStack.Add(new Operation());
                                 _opIdx++;
                                 _state = State.PassageUpdateConditionElse;
-                                Console.WriteLine( "<STARTING ELSE");
+                                if (_debug) Console.WriteLine( "<STARTING ELSE");
                             } else {
                                 _state = State.PassageUpdateCondition;
-                                Console.WriteLine( "<STARTING ELSE IF");
+                                if (_debug) Console.WriteLine( "<STARTING ELSE IF");
                             }
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            Console.WriteLine( "<END ELSE or ELSE IF");
+                            if (_debug) Console.WriteLine( "<END ELSE or ELSE IF");
                             _inConditionUpdate = false;
                         }
                     } else if (_state == State.ChoiceUpdate) {
@@ -870,13 +869,13 @@ namespace Ink.Runtime
                                 _opStack.Add(new Operation());
                                 _opIdx++;
                                 _state = State.ChoiceUpdateConditionElse;
-                                Console.WriteLine( "<STARTING ELSE");
+                                if (_debug) Console.WriteLine( "<STARTING ELSE");
                             } else {
                                 _state = State.ChoiceUpdateCondition;
-                                Console.WriteLine( "<STARTING ELSE IF");
+                                if (_debug) Console.WriteLine( "<STARTING ELSE IF");
                             }
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
-                            Console.WriteLine( "<END ELSE or ELSE IF");
+                            if (_debug) Console.WriteLine( "<END ELSE or ELSE IF");
                             _inConditionUpdate = false;
                         }
                     }
@@ -1804,7 +1803,7 @@ namespace Ink.Runtime
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static bool _debug = true; // Print all the crazy console writes.
+        static bool _debug = false; // Print all the crazy console writes.
         static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;

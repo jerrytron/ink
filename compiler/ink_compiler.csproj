@@ -38,4 +38,7 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Remove="System.Security.Cryptography.X509Certificates" />
+  </ItemGroup>
 </Project>

@@ -83,19 +83,6 @@ So yeah, _a lot_. There is probably more not listed here, but hopefully this set
 
 ## Features in Progress
 
-### [Conditional Blocks - If/Else](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#3-conditional-blocks-ifelse)
-
-Basically 'if/else' structures.
-
-**Current Behavior:** Only 'if' blocks are support. Not 'if/else' or 'if/else if/else'.
-
-See the [Conditional Block](#conditional-blocks) section for explanation on current functionality.
-
-- [ ] Design Choosatron compatible operation structure for handling additional conditional block types.
-- [ ] Add ompiler support for parsing additional conditional block types.
-- [ ] Update binary spec.
-- [ ] Add firmware support for additional conditional block types.
-
 ### [Fallback Choices](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#fallback-choices)
 
 A fallback choice is essentially a choice made for the player if all other potential choices aren't available. Choices can become unavailable if they have conditional that evaluates false, or if they are once-only choices that have already been selected.
@@ -126,42 +113,6 @@ In this case, if the fallback is triggered it will also print out content before
 - [ ] Add firmware support for 'Invisible Default' flag.
 
 ### Operation Subset
-
-Most but not all of Inks built in operations are currently supported. Below is a list of operations not yet supported that although Ink will not complain about, must be removed to compile for Choosatron. Support for them is in progress.
-
-Some operations will never be supported because they use variables types not supported, like float, string, and list. Those will not be listed here.
-
-|      Operation     |    Ink Syntax    |
-|:------------------:|:----------------:|
-| Not                |      not / !     |
-| Negate             |         _        |
-| Min                |     MIN(x, y)    |
-| Max                |     MAX(x, y)    |
-| Pow                |     POW(x, y)    |
-
-**Not**
-Syntax: `not` or `!`
-If the value is zero, returns true/1. If not zero, returns false/0.
-
-**Negate**
-Syntax: `_`
-Inverts the value of the provided variables. So `23` becomes `-23` and false becomes true. Returns the resulting value.
-
-**Min**
-Syntax: `MIN(var, var)`
-Returns the lower value.
-
-**Max**
-Syntax: `MAX(var, var)`
-Returns the higher value.
-
-**Pow**
-Syntax: `POW(varA, varB)`
-Returns _varA_ to the power of _varB_.
-
-- [ ] Add new operations to compiler.
-- [ ] Update binary spec.
-- [ ] Add firmware support for the new operations.
 
 ### [Square Brackets in Choices](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#suppressing-choice-text)
 
@@ -251,7 +202,6 @@ This is not a preferred syntax as it makes the strong assumption that you _didn'
     + -> next
 ```
 
-
 ### Continue Choice
 
 This is a Choosatron specific features. When used, instead of listing and numbering choices, it will output _Continue..._ and wait for any input to process the divert to another knot/stitch. This is a bit more elegant than listing a single choice with the number and only allowing a '1' button press.
@@ -325,6 +275,11 @@ All operations listed can be used in valid assignment or conditional logic. This
 | Or                 |     or / \|\|    |
 | Random (Inclusive) | RANDOM(min, max) |
 | Dice               | DICE(num, sides) |
+| Not                |      not / !     |
+| Negate             |         _        |
+| Min                |     MIN(x, y)    |
+| Max                |     MAX(x, y)    |
+| Pow                |     POW(x, y)    |
 
 #### [Logic](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#2-logic)
 
@@ -345,6 +300,17 @@ The following syntax will test conditions. Operational statements wrapped inside
 
 That will be true if `visit_paris` is false. Or check how much ammo the player has.
 `{ bullets_left == 0 }`
+
+### [Conditional Blocks - If/Else](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#3-conditional-blocks-ifelse)
+
+There is support for 'If', 'If, Else', 'If, Else If...', and 'If, Else If..., Else'. 
+
+See the [Conditional Block](#conditional-blocks) section for explanation on current functionality.
+
+- [x] Design Choosatron compatible operation structure for handling additional conditional block types.
+- [x] Add compiler support for parsing additional conditional block types.
+- [x] Update binary spec.
+- [x] Add firmware support for additional conditional block types.
 
 #### Choosatron Compatible Updates
 
