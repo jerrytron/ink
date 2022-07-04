@@ -175,6 +175,10 @@ namespace Ink.Runtime
                 _stateStack.Pop();
             }
 
+            public void Write(sbyte b) {
+                _writer.Write(b);
+            }
+
             public void Write(byte b) {
                 _writer.Write(b);
             }
@@ -182,11 +186,6 @@ namespace Ink.Runtime
             public void Write(byte[] b) {
                 _writer.Write(b);
             }
-
-            // public void Write(int i)
-            // {
-            //     _writer.Write(i);
-            // }
 
             public void Write(Int16 i)
             {

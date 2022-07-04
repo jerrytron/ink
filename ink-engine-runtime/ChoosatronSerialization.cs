@@ -1698,7 +1698,7 @@ namespace Ink.Runtime
             byte[] data;
             byte[] buffer;
 
-            // Lanuage Code - 4 bytes
+            // Language Code - 4 bytes
             data = ASCIIEncoding.ASCII.GetBytes( tags[kLanguageCode] );
             buffer = new byte[4];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
