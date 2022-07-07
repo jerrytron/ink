@@ -31,7 +31,7 @@ VAR var2 = 0
 
 === test1 ===
     ~ var2 = TEST_CONST
-    This story is meant to be a fallthrough of tests. Choices will inform you if a command or operation has failed. Testing initialization, setting a CONST value, and equality.
+    This story is meant to be a fallthrough of tests. Choices will inform you if a command or operation has failed. Testing initialization, setting a CONST value, and equality. Var1 = { var1 } - Var2 = { var2 }.
     + { var1 == TEST_CONST } 1: var1 == TEST_CONST == 5
         -> test1
     + { var1 == var2 } 2: var1 == _var2
@@ -44,7 +44,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1-- // 4
     ~ var2 = var2 + var1 // 5 + 4 = 9
-    Testing subtraction, addition, and 'not equals'.
+    Testing subtraction, addition, and 'not equals'. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 != TEST_CONST } 1: var1 != TEST_CONST
         -> test2
     + { var1 != var2 } 2: var1 != Var2
@@ -55,7 +55,7 @@ VAR var2 = 0
     
 = test3
     ~ passed_tests++
-    Testing greater, greater or equal, less than, and less or equal.
+    Testing greater, greater or equal, less than, and less or equal. Var1 = { var1 }, Var2 = { var2 }.
     6 Tests
     + { var2 > var1 } 1: var2 > var1
         -> test3
@@ -78,7 +78,7 @@ VAR var2 = 0
     ~ var2 = 10
     ~ var1 = var2 % var1 // 2
     ~ var2 = var1 % var2 // 2
-    Testing MODULUS - (A % B) and assign.
+    Testing MODULUS - (A % B) and assign. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 2 } 1: var2 % var1 == 2
         -> test4
     + { var2 == 2 } 2: var1 % var2 == 2
@@ -91,7 +91,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = var2 + 3 // 5
     ~ var2 = var1 - 20 // 
-    Testing addition and subtraction.
+    Testing addition and subtraction. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 5 } 1: var2 + 3 == 7
         -> test5
     + { var2 == -15 } 2: var1 - 20 == -15
@@ -104,7 +104,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = var1 * 5
     ~ var2 = var2 * -5
-    Testing multiplication.
+    Testing multiplication. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 25 } 1: var1 * 5 == 25
         -> test6
     + { var2 == 75 } 2: var2 * -5 == 74
@@ -117,7 +117,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = var2 / var1
     ~ var2 = 27 / var1
-    Testing division. Choosatron only supports integers remember.
+    Testing division. Choosatron only supports integers remember. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 3 } 1: var2 / var1 == 3
         -> test7
     + { var2 == 9 } 2: 25 / var1 == 5
@@ -130,7 +130,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = RANDOM(15, 30)
     ~ var2 = RANDOM(-10, 10)
-    Testing RANDOM(min, max).
+    Testing RANDOM(min, max). Var1 = { var1 }, Var2 = { var2 }.
     + { var1 >= 15 && var1 <= 30 } 1: RANDOM(15, 30)
         -> test8
     + { var2 >= -10 && var2 <= 10 } 2: RANDOM(-10, 10)
@@ -143,7 +143,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = false
     ~ var2 = true
-    Testing not (!).
+    Testing not (!). Var1 = { var1 }, Var2 = { var2 }.
     + { !var1 == true } 1: not false
         -> test9
     + { !var2 == false } 2: not true
@@ -159,7 +159,7 @@ VAR var2 = 0
     ~ var1 = MIN(13, var2) // 13
     ~ var2 = -77
     ~ var2 = MIN(var1, var2) // -77
-    Testing MIN(a, b).
+    Testing MIN(a, b). Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 13 } 1: MIN(13, var2) == 13
         -> test10
     + { var2 == -77 } 2: MIN(var1, var2) == -77
@@ -172,7 +172,7 @@ VAR var2 = 0
     ~ passed_tests++
     ~ var1 = MAX(-110, -54)
     ~ var2 = MAX(45, 3232)
-    Testing MAX(a, b).
+    Testing MAX(a, b). Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == -54 } 1: MAX(-110, -54) == -54
         -> test11
     + { var2 == 3232 } 2: MAX(45, 3232) == 3232
@@ -205,7 +205,7 @@ VAR var2 = 0
         - else:
             ~ var2 = 999
     }
-    Testing IF and IF/ELSE.
+    Testing IF and IF/ELSE. Var1 = { var1 }, Var2 = { var2 }.
     + { var1 == 100 } 1: If (var1 == var2 - 4064) \{ var1 = 99 + 1 \}
         -> test13
     + { var2 == 999 } 2: If (var2 > 5000) \{ var2 = 666 \} Else \{ var2 = 999 \}
@@ -224,7 +224,7 @@ VAR var2 = 0
         - else:
             ~ var2 = 3
     }
-    Testing IF and IF/ELSE.
+    Testing IF and IF/ELSE. Var1 = { var1 }, Var2 = { var2 }.
     + { var2 == 1 } Part 1/3: If (var1 < 101 ) \{ var2 = 1 \}...
         ~ var1++
         -> test14
@@ -236,7 +236,7 @@ VAR var2 = 0
 
 = passed
     ~ passed_tests++
-    All 14 out of 14 tests passed!
+    All { passed_tests } out of { TOTAL_TESTS } tests passed!
     -> END
 
 = error
