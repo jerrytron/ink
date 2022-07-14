@@ -52,6 +52,10 @@ namespace Ink.Runtime
                 _updateOps.Add(aUpdate);
             }
 
+            public void InsertUpdate(int aIndex, Operation aUpdate) {
+                _updateOps.Insert(aIndex, aUpdate);
+            }
+
             public List<Operation> GetUpdates() {
                 return _updateOps;
             }
@@ -196,8 +200,9 @@ namespace Ink.Runtime
                 get { return _isInvisibleDefault; }
                 set {
                     _isInvisibleDefault = value;
-                    _attributes = Bits.SetBit(_attributes, 0, value);
-                    if (_debug) Console.WriteLine("Attrs: " + Bits.GetBinaryString(_attributes));
+                    // if (_debug) Console.WriteLine("1-Invis: " + Bits.GetBinaryString(_attributes));
+                    _attributes = Bits.SetBit(_attributes, 3, value);
+                    // if (_debug) Console.WriteLine("2-Invis: " + Bits.GetBinaryString(_attributes));
                 }
             }
             private bool _onceOnly;
@@ -205,14 +210,18 @@ namespace Ink.Runtime
                 get { return _onceOnly; }
                 set {
                     _onceOnly = value;
-                    _attributes = Bits.SetBit(_attributes, 1, value);
-                    if (_debug) Console.WriteLine("Attrs2: " + Bits.GetBinaryString(_attributes));
+                    // if (_debug) Console.WriteLine("1-OnceOnly: " + Bits.GetBinaryString(_attributes));
+                    _attributes = Bits.SetBit(_attributes, 4, value);
+                    // if (_debug) Console.WriteLine("2-OnceOnly: " + Bits.GetBinaryString(_attributes));
                 }    
             }
 
             public Choice() { Body = ""; }
 
             public void SetFlags(byte aFlags) {
+                // if (_debug) Console.WriteLine("1-Flag: " + Bits.GetBinaryString(aFlags) + ", Attr: " + Bits.GetBinaryString(_attributes));
+                _attributes |= aFlags;
+                // if (_debug) Console.WriteLine("2-Flag: " + Bits.GetBinaryString(aFlags) + ", Attr: " + Bits.GetBinaryString(_attributes));
                 HasCondition = Bits.IsBitSetTo1(aFlags, 0);
                 HasStartContent = Bits.IsBitSetTo1(aFlags, 1);
                 HasChoiceOnlyContent = Bits.IsBitSetTo1(aFlags, 2);
@@ -223,7 +232,7 @@ namespace Ink.Runtime
                 if (_debug) Console.WriteLine(HasChoiceOnlyContent ? "f:choice only text" : "f:no choice only text");
                 if (_debug) Console.WriteLine(IsInvisibleDefault ? "f:invisible" : "f:visible");
                 if (_debug) Console.WriteLine(OnceOnly ? "f:once only" : "f:not once");
-                if (_debug) Console.WriteLine("Flag: " + aFlags + ", Attr: " + _attributes);
+                if (_debug) Console.WriteLine("Flag: " + aFlags + ", Attr: " + Bits.GetBinaryString(_attributes));
             }
 
             public void AddCondition(Operation aCondition) {
@@ -369,6 +378,8 @@ namespace Ink.Runtime
                 Min, // Returns int16_t - the smaller of the two numbers
                 Max, // Returns int16_t - the larger of the two numbers
                 Pow, // Returns int16_t - val a to the power of val b
+                ChoiceCount, // Returns int16_t - the total number of visible choices
+                Turns, // Returns int16_t - the number of turns taken so far in the story
                 // ----
                 TOTAL_OPS
             }
@@ -624,6 +635,8 @@ namespace Ink.Runtime
                 _operationNames [(int)OperationType.Min] = "MIN";
                 _operationNames [(int)OperationType.Max] = "MAX";
                 _operationNames [(int)OperationType.Pow] = "POW";
+                _operationNames [(int)OperationType.ChoiceCount] = "ChoiceCount";
+                _operationNames [(int)OperationType.Turns] = "Turns";
 
                 for (int i = 0; i < (int)OperationType.TOTAL_OPS; ++i) {
                     if (_operationNames [i] == null) {
@@ -658,6 +671,8 @@ namespace Ink.Runtime
                 { NativeFunctionCall.Min, OperationType.Min },
                 { NativeFunctionCall.Max, OperationType.Max },
                 { NativeFunctionCall.Pow, OperationType.Pow }
+                // { NativeFunctionCall.ChoiceCount, OperationType.ChoiceCount },
+                // { NativeFunctionCall.Turns, OperationType.Turns },
             };
         }
 
@@ -837,7 +852,6 @@ namespace Ink.Runtime
                     } else if (_state == State.PassageUpdate) {
                         if (name == "b") {
                             _state = State.PassageUpdateCondition;
-                            _buildingConditional = true;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                             _inConditionUpdate = false;
                         }
@@ -859,7 +873,6 @@ namespace Ink.Runtime
                     } else if (_state == State.ChoiceUpdate) {
                         if (name == "b") {
                             _state = State.ChoiceUpdateCondition;
-                            _buildingConditional = true;
                             ParseRuntimeContainer(namedContainer, aWithoutName:true);
                             _inConditionUpdate = false;
                         }
@@ -1278,6 +1291,10 @@ namespace Ink.Runtime
                     if (_evaluating) {
                         ProcessOperation(controlCmd.ToString());
                     }
+                } else if (controlCmd.commandType == ControlCommand.CommandType.ChoiceCount) {
+                    if (_debug) Console.WriteLine("<ChoiceCount CMD>");
+                } else if (controlCmd.commandType == ControlCommand.CommandType.Turns) {
+                    if (_debug) Console.WriteLine("<Turns CMD>");
                 } else if (controlCmd.commandType == ControlCommand.CommandType.NoOp) {
                     // TODO: If a conditional series is being built, it should now be complete.
 
@@ -1290,8 +1307,6 @@ namespace Ink.Runtime
                         _opStack.Clear();
                         _opIdx = 0;
                     }
-
-                    _buildingConditional = false;
                 }
                 return;
             }
@@ -1495,7 +1510,8 @@ namespace Ink.Runtime
                         _varToIdx.Add(varAss.variableName, _varIdx);
                         _varIdx++;
                         _vars.Add(_opStack[0].RightVal);
-                        _passages[0].AddUpdate(_opStack[0]);
+                        _passages[0].InsertUpdate(_globalVarIdx, _opStack[0]);
+                        _globalVarIdx++;
 
                         _opIdx = 0;
                         _opStack.Clear();
@@ -1803,7 +1819,7 @@ namespace Ink.Runtime
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static bool _debug = false; // Print all the crazy console writes.
+        static bool _debug = true; // Print all the crazy console writes.
         static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;
@@ -1815,9 +1831,9 @@ namespace Ink.Runtime
         static bool _evaluating = false;
         static string _choiceOnlyContent;
         static bool _watchForChoiceUpdate = false;
-        static bool _buildingConditional = false;
         static bool _inConditionUpdate = false;
         static Int16 _varIdx = 0;
+        static int _globalVarIdx = 0;
         static int _newPsgDepth = 0;
         static Dictionary<string, string> _psgAliases = new Dictionary<string, string>();
         static List<Passage> _passages = new List<Passage>();
