@@ -343,7 +343,9 @@ namespace Ink.Runtime
                 Raw,
                 Var,
                 Op,
-                Visits,
+                ChoiceCount, // Returns int16_t - the total number of visible choices
+                Turns, // Returns int16_t - the number of turns taken so far in the story
+                Visits, // Returns int16_t - the number of visits to the current passage (NOT IMPLEMENTED)
                 NA // Not Applicable - only need one operand
             }
 
@@ -378,8 +380,6 @@ namespace Ink.Runtime
                 Min, // Returns int16_t - the smaller of the two numbers
                 Max, // Returns int16_t - the larger of the two numbers
                 Pow, // Returns int16_t - val a to the power of val b
-                ChoiceCount, // Returns int16_t - the total number of visible choices
-                Turns, // Returns int16_t - the number of turns taken so far in the story
                 // ----
                 TOTAL_OPS
             }
@@ -498,6 +498,22 @@ namespace Ink.Runtime
                 return false;
             }
 
+            public bool AddTerm(OperandType aType) {
+                if (LeftType == OperandType.NotSet) {
+                    LeftType = aType;
+                    return true;
+                } else if (RightType == OperandType.NotSet) {
+                    RightType = aType;
+                    return true;
+                }
+                return false;
+            }
+
+            // Return true if only requires one operand.
+            public bool IsSingleOp(string aOperation) {
+                return _singleOps.Contains(aOperation);
+            }
+
             public bool SetOpType(string aOperation) {
                 if (_functionMap.ContainsKey(aOperation)) {
                     _opType = _functionMap[aOperation];
@@ -576,10 +592,14 @@ namespace Ink.Runtime
                     output += LeftVal;
                 } else if (LeftType == OperandType.Var) {
                     output += "[" + LeftName + "]";
-                } else if (LeftType == OperandType.Visits) {
-                    output += "p[" + LeftName + "]";
                 } else if (LeftType == OperandType.Op) {
                     output += LeftOp.ToString();
+                } else if (LeftType == OperandType.ChoiceCount) {
+                    output += "CHOICE_COUNT";
+                } else if (LeftType == OperandType.Turns) {
+                    output += "TURNS";
+                } else if (LeftType == OperandType.Visits) {
+                    output += "p[" + LeftName + "]";
                 } else { // Not set yet.
                     output += "<NOT SET>";
                 }
@@ -594,6 +614,10 @@ namespace Ink.Runtime
                     output += "p[" + RightName + "]";
                 } else if (RightType == OperandType.Op) {
                     output += RightOp.ToString();
+                } else if (RightType == OperandType.ChoiceCount) {
+                    output += "CHOICE_COUNT";
+                } else if (RightType == OperandType.Turns) {
+                    output += "TURNS";
                 } else { // Not set yet.
                     output += "<NOT SET>";
                 }
@@ -635,8 +659,8 @@ namespace Ink.Runtime
                 _operationNames [(int)OperationType.Min] = "MIN";
                 _operationNames [(int)OperationType.Max] = "MAX";
                 _operationNames [(int)OperationType.Pow] = "POW";
-                _operationNames [(int)OperationType.ChoiceCount] = "ChoiceCount";
-                _operationNames [(int)OperationType.Turns] = "Turns";
+                // _operationNames [(int)OperationType.ChoiceCount] = "ChoiceCount";
+                // _operationNames [(int)OperationType.Turns] = "Turns";
 
                 for (int i = 0; i < (int)OperationType.TOTAL_OPS; ++i) {
                     if (_operationNames [i] == null) {
@@ -646,6 +670,11 @@ namespace Ink.Runtime
             }
 
             static string[] _operationNames;
+
+            // List any operations that only require one operand.
+            static List<string> _singleOps = new List<string> {
+                NativeFunctionCall.Negate, NativeFunctionCall.Not
+            };
 
             static Dictionary<string, OperationType> _functionMap = new Dictionary<string, OperationType> {
                 { NativeFunctionCall.Equal, OperationType.Equal },
@@ -671,8 +700,8 @@ namespace Ink.Runtime
                 { NativeFunctionCall.Min, OperationType.Min },
                 { NativeFunctionCall.Max, OperationType.Max },
                 { NativeFunctionCall.Pow, OperationType.Pow }
-                // { NativeFunctionCall.ChoiceCount, OperationType.ChoiceCount },
-                // { NativeFunctionCall.Turns, OperationType.Turns },
+                // { ControlCommand.CommandType.ChoiceCount.ToString(), OperationType.ChoiceCount },
+                // { ControlCommand.CommandType.Turns.ToString(), OperationType.Turns }
             };
         }
 
@@ -1292,9 +1321,29 @@ namespace Ink.Runtime
                         ProcessOperation(controlCmd.ToString());
                     }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.ChoiceCount) {
-                    if (_debug) Console.WriteLine("<ChoiceCount CMD>");
+                    if (_debug) Console.WriteLine("<ChoiceCount CMD: " + controlCmd.ToString());
+                    if (_evaluating) {
+                        // ProcessOperation(controlCmd.ToString());
+                        if (_opStack[_opIdx].IsFull()) {
+                            ProcessFullOperation();
+                        }
+
+                        if (!_opStack[_opIdx].AddTerm(Operation.OperandType.ChoiceCount)) {
+                            throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
+                        }
+                    }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.Turns) {
-                    if (_debug) Console.WriteLine("<Turns CMD>");
+                    if (_debug) Console.WriteLine("<Turns CMD: " + controlCmd.ToString());
+                    if (_evaluating) {
+                        // ProcessOperation(controlCmd.ToString());
+                        if (_opStack[_opIdx].IsFull()) {
+                            ProcessFullOperation();
+                        }
+
+                        if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Turns)) {
+                            throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
+                        }
+                    }
                 } else if (controlCmd.commandType == ControlCommand.CommandType.NoOp) {
                     // TODO: If a conditional series is being built, it should now be complete.
 
@@ -1552,6 +1601,17 @@ namespace Ink.Runtime
         }
 
         static void ProcessOperation(string aName) {
+            if (_opStack[_opIdx].IsSingleOp(aName)) {
+                if (_opStack[_opIdx].IsFull()) {
+                    ProcessFullOperation();
+                }
+
+                // TODO: Should I use the NA type or just fill in unneeded op with 0?
+                if (!_opStack[_opIdx].AddTerm(Operation.OperandType.Raw, 0)) {
+                    throw new System.Exception ("Error adding term to operation: " + _opStack[_opIdx].ToString());
+                }
+            }
+
             // This isn't the first operation required and second operations only has left term.
             if (_opStack[_opIdx].RightType == Operation.OperandType.NotSet) {
                 // New operation is empty, must use previous operations.
