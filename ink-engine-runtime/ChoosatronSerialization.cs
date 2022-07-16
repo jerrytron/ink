@@ -1349,10 +1349,12 @@ namespace Ink.Runtime
 
                     if (_state == State.PassageUpdateCondition || _state == State.PassageUpdateConditionElse) {
                         _state = State.NamedContent;
+                        _psg.AddUpdate(_opStack[_opIdx]);
                         _opStack.Clear();
                         _opIdx = 0;
                     } else if (_state == State.ChoiceUpdateCondition || _state == State.ChoiceUpdateConditionElse) {
                         _state = State.ChoiceContent;
+                        _choice.AddUpdate(_opStack[_opIdx]);
                         _opStack.Clear();
                         _opIdx = 0;
                     }
@@ -1465,7 +1467,7 @@ namespace Ink.Runtime
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                         _opStack[_opIdx].SetOpType(Operation.OperationType.IfStatement);
-                        _psg.AddUpdate(_opStack[_opIdx]);
+                        // _psg.AddUpdate(_opStack[_opIdx]);
 
                         int idx = 0;
                         foreach (Operation op in _opStack) {
@@ -1485,7 +1487,7 @@ namespace Ink.Runtime
                             _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
                             _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                             _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
-                            _psg.AddUpdate(_opStack[_opIdx]);
+                            // _psg.AddUpdate(_opStack[_opIdx]);
 
                             idx = 0;
                             foreach (Operation op in _opStack) {
@@ -1514,7 +1516,7 @@ namespace Ink.Runtime
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-2]);
                         _opStack[_opIdx].AddTerm(_opStack[_opIdx-1]);
                         _opStack[_opIdx].SetOpType(Operation.OperationType.ElseStatement);
-                        _psg.AddUpdate(_opStack[_opIdx]);
+                        // _psg.AddUpdate(_opStack[_opIdx]);
 
                         int idx = 0;
                         foreach (Operation op in _opStack) {
