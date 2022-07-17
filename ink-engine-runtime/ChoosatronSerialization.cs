@@ -1259,7 +1259,8 @@ namespace Ink.Runtime
                         _opStack.Add(new Operation());
                         if (_debug) Console.WriteLine("<Start Choice Update Eval>");
                     } else if (_state == State.PassageUpdateCondition || _state == State.ChoiceUpdateCondition) {
-                        if (_opStack.Count == 1 && _opStack[0].GetOpType() == Operation.OperationType.IfStatement) {
+                        if (_opStack.Count == 1 && (_opStack[0].GetOpType() == Operation.OperationType.IfStatement ||
+                        _opStack[0].GetOpType() == Operation.OperationType.ElseStatement)) {
                             _opStack.Add(new Operation());
                             _opIdx++;
                         }
