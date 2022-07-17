@@ -346,7 +346,6 @@ namespace Ink.Runtime
                 ChoiceCount, // Returns int16_t - the total number of visible choices
                 Turns, // Returns int16_t - the number of turns taken so far in the story
                 Visits, // Returns int16_t - the number of visits to the current passage (NOT IMPLEMENTED)
-                NA // Not Applicable - only need one operand
             }
 
             public enum OperationType
@@ -1882,7 +1881,7 @@ namespace Ink.Runtime
             if (_debug) Console.WriteLine("IFID: " + ifidStr + ", Len: " + ifidStr.Length);
         }
 
-        static bool _debug = true; // Print all the crazy console writes.
+        static bool _debug = false; // Print all the crazy console writes.
         static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;

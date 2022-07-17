@@ -108,8 +108,8 @@ The `last_resort` divert will automatically occur if the other two choices aren'
 
 In this case, if the fallback is triggered it will also print out content before it diverts to `last_resort`.
 
-- [ ] Add compiler support for parsing fallback choice content if it exists.
-- [ ] Update binary spec.
+- [x] Add compiler support for parsing fallback choice content if it exists.
+- [x] Update binary spec.
 - [ ] Add firmware support for 'Invisible Default' flag.
 
 ### Operation Subset
@@ -135,7 +135,7 @@ As mentioned above, the choice syntax or Ink is either a `+` or `*`. The former 
 **Current Behavior:** Until firmware is updated to support this, all choices are _Sticky_. You can still use conditions to manually set a choice to disappear from the available options.
 
 - [x] Add choice flag to compiled story to indicate sticky or once-only.
-- [ ] Update binary spec labeling.
+- [x] Update binary spec labeling.
 - [ ] Add firmware support to enforce this behavior.
 
 ### Visit Count
