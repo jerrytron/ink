@@ -14,7 +14,11 @@ If you haven't read the [Writing with Ink](https://github.com/inkle/ink/blob/mas
 
 ## Example Ink Stories
 
-A number of examples are provided with the compiler to help you verify the compiler is functioning, and for you to understand the available functionality and structural options. There are a few templates and two unique stories included; the first story is _Another Day at the MIA_. There are a number of variations included to show how structure can differ but still provide identical Choosatron stories in the end. In Ink, 'knots' are For instance, using 'knots' as headers to organize 'stitches' is perfectly valid. Or every passage of content can be a knot. The second story is _Revolver_. This demonstrates the use of logic in a story.
+A number of examples are provided with the compiler to help you verify the compiler is functioning, and for you to understand the available functionality and structural options. There are a few templates and two unique stories included; the first story is _Another Day at the MIA_ (`another-day.ink`). There is an alternate version of that story that just messes with the structure a bit to show off some things you can do (`another-day-alt.ink`). There are a number of variations included to show how structure can differ but still provide identical Choosatron stories in the end. In Ink, 'knots' are For instance, using 'knots' as headers to organize 'stitches' is perfectly valid. Or every passage of content can be a knot. The second story is _Revolver_ (`revolver.ink`). This demonstrates the use of logic in a story in a way that makes sense, whereas the following story examples are more about demonstrating particular capabilities and not trying to be cohesive games.
+
+There are two 'template' stories, `choosatron-ink-template.ink` and `choosatron-ink-template-vars.ink` included. They are both meant to be useful as starting points, while having just enough content to make it clear what is happening. The latter includes the use of variables and some logic.
+
+The `choosatron-condition-test.ink` story included tests just about every single logical function that can be run on the Choosatron. This is a great story to look at if you want to know what is possible using logic.
 
 ## Translation of Terms
 
