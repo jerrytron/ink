@@ -56,7 +56,6 @@ If we wanted to output the file into a folder called `output` it would be the fo
 `./inklecate -o output/revolver.dam -d examples/revolver.ink`
 
 If you want verbose output which will print out the parsed story structure you can add the `-v` argument.
-
 `./inklecate -v -o revolver.dam -d examples/revolver.ink`
 
 ## What You Can't Do
@@ -302,11 +301,6 @@ That will be true if `visit_paris` is false. Or check how much ammo the player h
 There is support for 'If', 'If, Else', 'If, Else If...', and 'If, Else If..., Else'. 
 
 See the [Conditional Block](#conditional-blocks) section for explanation on current functionality.
-
-- [x] Design Choosatron compatible operation structure for handling additional conditional block types.
-- [x] Add compiler support for parsing additional conditional block types.
-- [x] Update binary spec.
-- [x] Add firmware support for additional conditional block types.
 
 #### Choosatron Compatible Updates
 
