@@ -55,12 +55,41 @@ VAR spinning_right = false
     + <append> -> test_append_three
 
 = test_append_three
+    {
+        - chair_speed > 0:
+            ~ chair_speed--
+    }
+    {
+        - chair_speed > 0:
+            ~ chair_speed--
+        - else:
+            ~ spinning_right = false
+    }
+    {
+        - chair_speed > 9:
+            ~ chair_speed--
+        - spinning_right == false:
+            ~ spinning_right = true
+    }
+    {
+        - chair_speed > 9:
+            ~ chair_speed--
+        - spinning_right == false:
+            ~ spinning_right = true
+        - else:
+            ~ chair_speed = 5
+    }
     Could you tell? This final append example works but the previous two methods are preferred. This one happens automatically if you only have one choice and no choice content. Forgot about this stuff. Haven't you wondered where you are in this story?
     + -> a_little_game
 
 === a_little_game
 
 = small_office
+    { chair_speed > 0:
+        ~ chair_speed--
+    - else:
+        ~ chair_speed = RANDOM(1, 6)
+    }
     // Since you have to spin to start, setting the speed here instead on the choices below.
     ~ chair_speed = SPEED_BOOST
     You are in a small office cubicle. It has the usual beige office junk, but in the center is a bright red chair. Not just any chair, but a Spinmaster 5000! Hard to resist an invitation like that right? Right. You sit in the chair. Let's do this.
@@ -73,13 +102,17 @@ VAR spinning_right = false
 
 = spin_again
     // The chair looses speed every turn.
-    { chair_speed > 0:
-        ~ chair_speed--
+    {
+        - chair_speed > 0:
+            ~ chair_speed--
+        - spinning_right == false:
+            ~ spinning_right = true
+        - else:
+            ~ chair_speed = RANDOM(1, 6)
     }
     The world blurs and the sensation makes you tingle!
     // By tracking the direction the choice content can be more contextual.
     + { (spinning_right == false) and (chair_speed > 0) } Give another kick spinning left!
-    // + { (not spinning_right) and (chair_speed > 0) } Give another kick spinning left!
         -> spin_faster
     + { spinning_right and (chair_speed > 0) } Give another kick spinning right!
         -> spin_faster

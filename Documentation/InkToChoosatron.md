@@ -83,35 +83,6 @@ So yeah, _a lot_. There is probably more not listed here, but hopefully this set
 
 ## Features in Progress
 
-### [Fallback Choices](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#fallback-choices)
-
-A fallback choice is essentially a choice made for the player if all other potential choices aren't available. Choices can become unavailable if they have conditional that evaluates false, or if they are once-only choices that have already been selected.
-
-**Fallback Choice Example**
-```
-   * First choice. -> a_knot
-   * Second choice. -> another_knot
-   + -> last_resort
-```
-
-The `last_resort` divert will automatically occur if the other two choices aren't available to select.
-
-**Current Behavior:** Fallback choices can only be used as a way to auto-forward to another knot/stitch. They cannot include any content at this time.
-
-**Currently Unsupported**
-```
-   * First choice. -> a_knot
-   * Second choice. -> another_knot
-   + ->
-      You are out of options. You lose your grip and fall. -> last_resort
-```
-
-In this case, if the fallback is triggered it will also print out content before it diverts to `last_resort`.
-
-- [x] Add compiler support for parsing fallback choice content if it exists.
-- [x] Update binary spec.
-- [ ] Add firmware support for 'Invisible Default' flag.
-
 ### Operation Subset
 
 ### [Square Brackets in Choices](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#suppressing-choice-text)
@@ -232,6 +203,31 @@ The quality value can range from **1** to **5**.
     # eq:1
     -> END
 ```
+
+### [Fallback Choices](https://github.com/inkle/ink/blob/master/Documentation/WritingWithInk.md#fallback-choices)
+
+A fallback choice is essentially a choice made for the player if all other potential choices aren't available. Choices can become unavailable if they have conditional that evaluates false, or if they are once-only choices that have already been selected.
+
+**Fallback Choice Example**
+```
+   * First choice. -> a_knot
+   * Second choice. -> another_knot
+   + -> last_resort
+```
+
+The `last_resort` divert will automatically occur if the other two choices aren't available to select.
+
+**Current Behavior:** Fallback choices can only be used as a way to auto-forward to another knot/stitch. They cannot include any content at this time.
+
+**Currently Unsupported**
+```
+   * First choice. -> a_knot
+   * Second choice. -> another_knot
+   + ->
+      You are out of options. You lose your grip and fall. -> last_resort
+```
+
+In this case, if the fallback is triggered it will also print out content before it diverts to `last_resort`.
 
 ### Variables and Logic
 
