@@ -1909,7 +1909,7 @@ namespace Ink.Runtime
         public const byte kStartHeaderByte = 0x01;
         public const byte kBinVerMajor = 1;
         public const byte kBinVerMinor = 0;
-        public const byte kBinVerRev = 6;
+        public const byte kBinVerRev = 7;
 
         public const string kIfid = "ifid";
         public const string kStoryVersion = "version";
