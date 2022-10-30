@@ -4,11 +4,15 @@
 # author: Author Person
 # credits: My frans and fam.
 # contact: @twitter, email, perhaps website
-// If the ifid isn't present, one will be generated using the author and title as a seed.
-# ifid: 00000000-0000-0000-0000-000000000000
+# rating: Movie style rating like "G", "PG", "PG-13", "R", "NC-17"
+# warning: A content warning for the reader (long story length, drugs, violence, rape, etc.)
+# version: 1.0.0
 // Date + time in hours offset from GMT.
 # published: 2020-07-02-0500
-# version: 1.0.0
+// Three letter code for the language the story is written in.
+# language: eng
+// If the ifid isn't present, one will be generated using the author and title as a seed.
+# ifid: 00000000-0000-0000-0000-000000000000
 // End of Choosatron Tags
 
 // You need to tell the story where to begin. This is called a 'divert' and will get the ball rolling.
