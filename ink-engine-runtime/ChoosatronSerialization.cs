@@ -169,10 +169,10 @@ namespace Ink.Runtime
 
                 if (_choices.Count == 1) {
                     string body = _choices[0].Body;
-                    if (body.Length == 0 || body.Trim().ToLower() == "<append>") {
+                    if ((body.Length == 0) || (body.Trim().ToLower() == "<append>") || (body.Trim().ToLower() == "append") || (body.Trim().ToLower() == "continue...")) {
                         _choices[0].Body = "";
                         SetAppendFlag(true);
-                    } else if (body.Trim().ToLower() == "<continue>") {
+                    } else if ((body.Trim().ToLower() == "<continue>") || (body.Trim().ToLower() == "continue")) {
                         _choices[0].Body = "";
                         SetContinueFlag(true);
                     }
@@ -710,6 +710,10 @@ namespace Ink.Runtime
             // Parse for all passage content.            
             ParseRuntimeContainer(aContainer);
 
+            // Update choice links to match passage indexes.
+            ResolveReferences();
+            if (_debug) Console.WriteLine("Done resolving.");
+
             if (_debug) Console.WriteLine("------------");
 
             if (_verbose) { 
@@ -734,10 +738,6 @@ namespace Ink.Runtime
                     Console.WriteLine(" VAR " + map.Key + " = " + _vars[map.Value]);
                 }
             }
-
-            // Update choice links to match passage indexes.
-            ResolveReferences();
-            if (_debug) Console.WriteLine("Done resolving.");
 
             UInt32 storySize = 0;
             // Generate passage bytes.
@@ -820,6 +820,7 @@ namespace Ink.Runtime
                     _psgToIdx.Add(_psg.Name, (UInt16)_passages.Count);
                     _passages.Add(_psg);
                     _newPsgDepth = 0;
+                    _containerDepth = 0;
                     _psg = null;
                 }
             }
@@ -950,6 +951,13 @@ namespace Ink.Runtime
             if (container) {
                 if (_debug) Console.WriteLine(_indent + "[Container] " + container.name);
                 //_indent += kIndent;
+                _containerDepth++;
+                if (_debug) Console.WriteLine("<CONTAINER DEPTH: " + _containerDepth);
+                if (_containerDepth == 2 && _state == State.NamedContent) {
+                  if (_debug) Console.WriteLine("<Psg HAS NO CONTENT BUT THAT'S OK");
+                  _state = State.PassageContent;
+                  _psg.Body = "";
+                }
                 ParseRuntimeContainer(container);
                 //_indent = _indent.Remove(_indent.Length - kIndent.Length);
                 return;
@@ -1783,30 +1791,45 @@ namespace Ink.Runtime
             writer.Write( buffer );
 
             // Title - 64 bytes
+            if (tags[kTitle].Length > 64) {
+               throw new System.Exception ("Story title is greater than max 64 characters: " + tags[kTitle]);
+            }
             data = ASCIIEncoding.ASCII.GetBytes( tags[kTitle] );
             buffer = new byte[64];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
             writer.Write( buffer );
 
             // Subtitle - 32 bytes
+            if (tags[kSubtitle].Length > 32) {
+               throw new System.Exception ("Story subtitle is greater than max 32 characters: " + tags[kSubtitle]);
+            }
             data = ASCIIEncoding.ASCII.GetBytes( tags[kSubtitle] );
             buffer = new byte[32];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
             writer.Write( buffer );
 
             // Author - 48 bytes
+            if (tags[kAuthor].Length > 48) {
+               throw new System.Exception ("Story author is greater than max 48 characters: " + tags[kAuthor]);
+            }
             data = ASCIIEncoding.ASCII.GetBytes( tags[kAuthor] );
             buffer = new byte[48];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
             writer.Write( buffer );
 
             // Credits - 80 bytes
+            if (tags[kCredits].Length > 80) {
+               throw new System.Exception ("Story credits are greater than max 80 characters: " + tags[kCredits]);
+            }
             data = ASCIIEncoding.ASCII.GetBytes( tags[kCredits] );
             buffer = new byte[80];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
             writer.Write( buffer );
 
             // Contact - 128 bytes
+            if (tags[kContact].Length > 128) {
+               throw new System.Exception ("Story contact info is greater than max 128 characters: " + tags[kContact]);
+            }
             data = ASCIIEncoding.ASCII.GetBytes( tags[kContact] );
             buffer = new byte[128];
             Buffer.BlockCopy(data, 0, buffer, 0, data.Length);
@@ -1885,6 +1908,7 @@ namespace Ink.Runtime
         static bool _verbose = false; // Print the story structure after converting to Choosatron.
         static string _indent = "";
         static int _dataDepth = 0;
+        static int _containerDepth = 0;
         static State _state = State.None;
         static Passage _psg;
         static Choice _choice;
